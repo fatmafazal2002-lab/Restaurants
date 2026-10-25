@@ -29,3 +29,12 @@ Hosted Supabase checks passed for new heading fonts, density, avatar visibility,
 ## Sign-out and app-admin console — 2026-10-25
 
 39 tests passed, with 3 opt-in local concurrency checks skipped. Production build passed. Hosted verification confirmed platform RPC denial for a restaurant owner, platform-admin status/plan changes, paused guest sessions, reactivation and a cleared session after local sign-out. Temporary platform account and restaurant fixtures were removed. New tests verify scoped logout and surfaced Auth failures. After the user nominated their email, the existing confirmed account was granted platform-admin membership and the assignment was verified. No account was promoted by inference. The deployed /platform login was inspected in the browser.
+
+## Tenant onboarding, localization and platform insights — 2026-10-25
+
+- Added production migration tests for ten interface/font choices, restaurant default language, verified-email employee claims, private personnel data, owner protection, cross-tenant denial, removal and restoration.
+- Hosted verification passed with disposable accounts: employee profiles, pending registration, staff-only visibility, private employee-photo download denial, Auth, tenant isolation, concurrent ordering, transitions, Realtime, Storage, analytics, package prices/features, before/after audit and sign-out. Fixtures were removed.
+- Browser checks used temporary local-only preview routes (removed before deployment). English, German and Turkish onboarding labels and ten choices were verified. Desktop preview and mobile dark setup inspected; setup and guest views have no horizontal overflow at 390 px.
+- Browser cart checks confirmed click-to-add, increment, pointer drag while scrolled (quantity 2 to 3; total EUR24 to EUR36), removal and success notification. Touch-specific dragging uses Framer Motion pointer events with a dedicated non-scrolling handle; physical-device touch testing remains outstanding.
+- Video reference frames at 2/8/16/24 seconds were inspected for restrained presentation and order-confirmation feedback.
+- No changes were made to real restaurant employee records during verification. New employee-profile migration backfilled existing non-owner memberships. Docker catalog caching was unavailable; remote migration application succeeded.

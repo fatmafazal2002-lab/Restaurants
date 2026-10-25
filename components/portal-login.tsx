@@ -74,11 +74,12 @@ export function PortalLogin({
             <img src={brand.logo_url} alt={brand.name} />
           ) : (
             <>
-              mise<span>✳</span>
+              {brand?.name || "mise"}
+              <span>✳</span>
             </>
           )}
         </a>
-        <span>{brand?.name || "A better service, together."}</span>
+        <span>{brand?.name || tx("A better service, together.")}</span>
         <PreferenceControls />
       </header>
       <div className="portal-login-grid">

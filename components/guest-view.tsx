@@ -14,7 +14,7 @@ import {
   ShoppingBag,
   Utensils,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { brandingAttributes, brandingStyle } from "@/lib/branding";
 import { RoleAvatar } from "./role-avatar";
 import { Button } from "./ui/button";
@@ -55,6 +55,16 @@ export function GuestView({
     [edit, setEdit] = useState<OrderItem | null>(null),
     [ratingOrder, setRatingOrder] = useState<Order | null>(null),
     [tab, setTab] = useState<"menu" | "orders">("menu");
+  const reducedMotion = useReducedMotion();
+  const [cartNotice, setCartNotice] = useState("");
+  const [dragging, setDragging] = useState(false),
+    [overDrop, setOverDrop] = useState(false);
+  const dropTarget = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!cartNotice) return;
+    const timer = setTimeout(() => setCartNotice(""), 3000);
+    return () => clearTimeout(timer);
+  }, [cartNotice]);
   const sending = useRef(false);
   const brand = w.restaurant ?? w.previewBrand;
   useEffect(() => {
@@ -79,6 +89,7 @@ export function GuestView({
   }, [cart, pending, w.sessionId, loaded]);
   const add = (id: string) => {
     if (pending) return;
+    setCartNotice(tx("Added to your order"));
     setCart((c) => {
       const found = c.find((i) => i.menu_item_id === id);
       return found
@@ -122,6 +133,7 @@ export function GuestView({
       setCart([]);
       setPending(null);
       setTab("orders");
+      setCartNotice(tx("Order sent to the kitchen"));
     }
     sending.current = false;
   };
@@ -280,9 +292,11 @@ export function GuestView({
                         <motion.article
                           className="menu-card"
                           key={item.id}
-                          initial={{ opacity: 0, y: 12 }}
+                          initial={
+                            reducedMotion ? false : { opacity: 0, y: 12 }
+                          }
                           animate={{ opacity: 1, y: 0 }}
-                          whileHover={{ y: -3 }}
+                          whileHover={reducedMotion ? undefined : { y: -3 }}
                         >
                           <div className="dish-image">
                             {item.image_url ? (
@@ -325,6 +339,43 @@ export function GuestView({
                                 aria-label={item.name}
                               />
                             )}
+                            <motion.button
+                              type="button"
+                              className="drag-handle"
+                              disabled={!!pending}
+                              drag={!pending}
+                              dragSnapToOrigin
+                              dragMomentum={false}
+                              aria-label={`${tx("Drag to your order")}: ${item.name}`}
+                              onDragStart={() => setDragging(true)}
+                              onDrag={(_, info) => {
+                                const r =
+                                  dropTarget.current?.getBoundingClientRect();
+                                setOverDrop(
+                                  !!r &&
+                                    info.point.x - window.scrollX >= r.left &&
+                                    info.point.x - window.scrollX <= r.right &&
+                                    info.point.y - window.scrollY >= r.top &&
+                                    info.point.y - window.scrollY <= r.bottom,
+                                );
+                              }}
+                              onDragEnd={(_, info) => {
+                                const r =
+                                  dropTarget.current?.getBoundingClientRect();
+                                if (
+                                  r &&
+                                  info.point.x - window.scrollX >= r.left &&
+                                  info.point.x - window.scrollX <= r.right &&
+                                  info.point.y - window.scrollY >= r.top &&
+                                  info.point.y - window.scrollY <= r.bottom
+                                )
+                                  add(item.id);
+                                setDragging(false);
+                                setOverDrop(false);
+                              }}
+                            >
+                              {tx("Drag to your order")} ↗
+                            </motion.button>
                             <Button
                               variant="outline"
                               disabled={!!pending}
@@ -353,7 +404,9 @@ export function GuestView({
                       );
                       return (
                         <div key={item.menu_item_id} className="cart-item">
-                          <strong>{dish?.name || "Unavailable item"}</strong>
+                          <strong>
+                            {dish?.name || tx("Unavailable item")}
+                          </strong>
                           <div className="quantity-control">
                             <Button
                               variant="ghost"
@@ -392,6 +445,21 @@ export function GuestView({
                               )}
                             </span>
                           </div>
+                          <Button
+                            className="cart-remove"
+                            variant="ghost"
+                            disabled={!!pending}
+                            onClick={() => {
+                              setCart((c) =>
+                                c.filter(
+                                  (i) => i.menu_item_id !== item.menu_item_id,
+                                ),
+                              );
+                              setCartNotice(tx("Item removed"));
+                            }}
+                          >
+                            {tx("Remove")}
+                          </Button>
                           <textarea
                             aria-label={`${t("special")}: ${dish?.name}`}
                             placeholder={t("special")}
@@ -487,10 +555,18 @@ export function GuestView({
           </>
         )}
       </main>
-      {notice && (
+      {dragging && (
+        <div
+          ref={dropTarget}
+          className={`cart-drop-target ${overDrop ? "is-over" : ""}`}
+        >
+          {tx("Drop here to add to your order")}
+        </div>
+      )}
+      {(notice || cartNotice) && (
         <div className="toast" role="status">
           <Check size={18} />
-          {notice}
+          {cartNotice || notice}
         </div>
       )}
       {edit && (

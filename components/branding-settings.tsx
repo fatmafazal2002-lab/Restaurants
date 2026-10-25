@@ -1,4 +1,5 @@
 "use client";
+import { interfaces, fontOptions } from "@/lib/appearance-options";
 import { translateText as tx } from "@/lib/translation";
 import { usePreferences } from "./preferences";
 
@@ -100,45 +101,24 @@ export function BrandingSettings({
                 )}
           </p>
           <div className="brand-presets">
-            {[
-              {
-                label: tx("Olive café"),
-                brand_color: "#53634b",
-                accent_color: "#b58a56",
-                font_family: "friendly" as const,
-                heading_font: "editorial" as const,
-                interface_style: "soft" as const,
-                theme_mode: "light" as const,
-                menu_layout: "grid" as const,
-              },
-              {
-                label: tx("Modern bistro"),
-                brand_color: "#303b56",
-                accent_color: "#a48554",
-                font_family: "modern" as const,
-                heading_font: "modern" as const,
-                interface_style: "minimal" as const,
-                theme_mode: "light" as const,
-                menu_layout: "list" as const,
-              },
-              {
-                label: tx("After hours"),
-                brand_color: "#b4c797",
-                accent_color: "#e2b275",
-                font_family: "modern" as const,
-                heading_font: "editorial" as const,
-                interface_style: "classic" as const,
-                theme_mode: "dark" as const,
-                menu_layout: "grid" as const,
-              },
-            ].map(({ label, ...preset }) => (
+            {interfaces.map((preset) => (
               <button
-                key={label}
+                key={preset.id}
                 type="button"
-                onClick={() => setDraft((d) => ({ ...d, ...preset }))}
+                onClick={() =>
+                  setDraft((d) => ({
+                    ...d,
+                    brand_color: preset.color,
+                    accent_color: preset.accent,
+                    font_family: preset.font,
+                    heading_font: preset.heading,
+                    interface_style: preset.id,
+                    theme_mode: preset.mode,
+                  }))
+                }
               >
-                <span style={{ background: preset.brand_color }} />
-                {label}
+                <span style={{ background: preset.color }} />
+                {tx(preset.name)}
               </button>
             ))}
           </div>
@@ -242,15 +222,11 @@ export function BrandingSettings({
                 value={draft.font_family || "modern"}
                 onChange={(e) => change("font_family", e.target.value)}
               >
-                <option value="modern">
-                  {de ? "Modern · Sans Serif" : tx("Modern · Sans serif")}
-                </option>
-                <option value="editorial">
-                  {de ? "Editorial · Serifenschrift" : tx("Editorial · Serif")}
-                </option>
-                <option value="friendly">
-                  {de ? "Freundlich · Humanistisch" : tx("Friendly · Humanist")}
-                </option>
+                {fontOptions.map((option) => (
+                  <option value={option.id} key={option.id}>
+                    {tx(option.name)}
+                  </option>
+                ))}
               </select>
             </Field>
           </div>
@@ -260,15 +236,11 @@ export function BrandingSettings({
                 value={draft.interface_style || "classic"}
                 onChange={(e) => change("interface_style", e.target.value)}
               >
-                <option value="classic">
-                  {de ? "Klassisch" : tx("Classic")}
-                </option>
-                <option value="soft">
-                  {de ? "Weich & rund" : tx("Soft & rounded")}
-                </option>
-                <option value="minimal">
-                  {de ? "Minimalistisch" : tx("Minimal")}
-                </option>
+                {interfaces.map((option) => (
+                  <option value={option.id} key={option.id}>
+                    {tx(option.name)}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label={de ? "Speisekartenlayout" : tx("Guest menu layout")}>
@@ -291,9 +263,11 @@ export function BrandingSettings({
                 value={draft.heading_font || "editorial"}
                 onChange={(e) => change("heading_font", e.target.value)}
               >
-                <option value="modern">{tx("Modern · Sans serif")}</option>
-                <option value="editorial">{tx("Editorial · Serif")}</option>
-                <option value="friendly">{tx("Friendly · Humanist")}</option>
+                {fontOptions.map((option) => (
+                  <option value={option.id} key={option.id}>
+                    {tx(option.name)}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label={de ? "Abstände" : tx("Interface spacing")}>
@@ -368,6 +342,45 @@ export function BrandingSettings({
               accept="image/png,image/jpeg,image/webp"
             />
           </Field>
+          <Field label={tx("Default language")}>
+            <select
+              value={draft.default_language || "en"}
+              onChange={(e) => change("default_language", e.target.value)}
+            >
+              <option value="en">English</option>
+              <option value="de">Deutsch</option>
+              <option value="tr">Türkçe</option>
+            </select>
+          </Field>
+          <div className="settings-actions">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={(e) => {
+                const input = e.currentTarget.form?.elements.namedItem(
+                  "logo",
+                ) as HTMLInputElement | null;
+                if (input) input.value = "";
+                setDraft((d) => ({ ...d, logo_url: null }));
+              }}
+            >
+              {tx("Remove logo")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={(e) => {
+                const input = e.currentTarget.form?.elements.namedItem(
+                  "cover",
+                ) as HTMLInputElement | null;
+                if (input) input.value = "";
+                setDraft((d) => ({ ...d, cover_url: null }));
+              }}
+            >
+              {tx("Remove cover")}
+            </Button>
+            <small>{tx("Save changes to apply removals.")}</small>
+          </div>
           <Button disabled={busy}>
             <Check size={17} />
             {t("save")}

@@ -22,12 +22,20 @@ export type Branding = Pick<
   | "welcome_title"
   | "welcome_message"
   | "cover_url"
+  | "default_language"
   | "currency"
 >;
 export const fontStacks = {
   modern: "Arial, Helvetica, sans-serif",
   editorial: 'Georgia, "Times New Roman", serif',
   friendly: '"Trebuchet MS", Arial, sans-serif',
+  geometric: '"Avenir Next", "Century Gothic", sans-serif',
+  humanist: "Verdana, Geneva, sans-serif",
+  mono: '"Courier New", Courier, monospace',
+  classic: 'Palatino, "Palatino Linotype", serif',
+  rounded: '"Arial Rounded MT Bold", "Trebuchet MS", sans-serif',
+  luxury: 'Baskerville, "Times New Roman", serif',
+  condensed: 'Impact, "Arial Narrow", sans-serif',
 };
 export function contrastText(hex: string) {
   const color = hex.replace("#", "");

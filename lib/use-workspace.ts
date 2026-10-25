@@ -15,7 +15,7 @@ import type {
   Restaurant,
   ServiceRequest,
 } from "./types";
-export function useWorkspace(portal?: Portal) {
+export function useWorkspace(portal?: Portal, tenantSlug?: string) {
   const [previewBrand, setPreviewBrand] = useState<Branding | null>(null);
   const [user, setUser] = useState<User | null>(null),
     [authReady, setAuthReady] = useState(!supabase);
@@ -40,10 +40,13 @@ export function useWorkspace(portal?: Portal) {
   useEffect(() => {
     setGuestToken(new URLSearchParams(location.search).get("table"));
     const query = new URLSearchParams(location.search);
-    if (supabase && (query.get("table") || query.get("restaurant"))) {
+    if (
+      supabase &&
+      (query.get("table") || query.get("restaurant") || tenantSlug)
+    ) {
       void rpc<Branding | null>("get_public_branding", {
         p_token: query.get("table"),
-        p_slug: query.get("restaurant"),
+        p_slug: tenantSlug || query.get("restaurant"),
       })
         .then(setPreviewBrand)
         .catch(() => setPreviewBrand(null));
@@ -87,7 +90,7 @@ export function useWorkspace(portal?: Portal) {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
     };
-  }, []);
+  }, [tenantSlug]);
   const refresh = useCallback(async () => {
     if (!supabase || !authReady) return;
     const gen = ++generation.current;
@@ -117,6 +120,7 @@ export function useWorkspace(portal?: Portal) {
         if (error) throw error;
         return data as T;
       };
+      if (!user.is_anonymous) await rpc("claim_employee_access", {});
       let rid = restaurantId;
       let sid = "";
       if (guestToken) {
@@ -140,10 +144,18 @@ export function useWorkspace(portal?: Portal) {
         ),
       ]);
       if (gen !== generation.current) return;
+      if (tenantSlug && !guestToken) {
+        const tenant = rs.find((r) => r.slug === tenantSlug);
+        if (!tenant)
+          throw new Error("You do not have access to this restaurant.");
+        rid = tenant.id;
+      }
       if (!rs.some((r) => r.id === rid)) {
         const branded = rs.find(
           (r) =>
-            r.slug === new URLSearchParams(location.search).get("restaurant"),
+            r.slug ===
+            (tenantSlug ||
+              new URLSearchParams(location.search).get("restaurant")),
         );
         const matching = rs.find((r) =>
           ms.some(
@@ -191,6 +203,7 @@ export function useWorkspace(portal?: Portal) {
           supabase
             .from("menu_items")
             .select("*")
+            .eq("archived", false)
             .eq("restaurant_id", rid)
             .order("created_at"),
         ),
@@ -251,7 +264,7 @@ export function useWorkspace(portal?: Portal) {
     } finally {
       if (gen === generation.current) setLoading(false);
     }
-  }, [authReady, user, restaurantId, guestToken, portal]);
+  }, [authReady, user, restaurantId, guestToken, portal, tenantSlug]);
   useEffect(() => {
     void refresh();
   }, [refresh, online]);

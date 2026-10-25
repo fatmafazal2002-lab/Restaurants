@@ -218,8 +218,7 @@ export function LandingPage() {
                 <h3>{x.title}</h3>
                 <p>{x.text}</p>
                 <a href={x.link}>
-                  {tx("Open")}
-                  {x.label.toLowerCase()} <ArrowUpRight size={17} />
+                  {tx("Open")} {tx(x.label)} <ArrowUpRight size={17} />
                 </a>
               </article>
             ))}

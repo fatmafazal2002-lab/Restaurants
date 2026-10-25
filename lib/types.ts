@@ -1,3 +1,4 @@
+import type {FontFamily,InterfaceStyle} from "./appearance-options";
 export type Role = "owner" | "admin" | "cook" | "waiter";
 export type Status = "placed" | "preparing" | "ready" | "served" | "cancelled";
 export type Restaurant = {
@@ -12,15 +13,16 @@ export type Restaurant = {
   phone: string;
   accent_color: string;
   theme_mode: "light" | "dark" | "system";
-  font_family: "modern" | "editorial" | "friendly";
-  interface_style: "classic" | "soft" | "minimal";
+  font_family: FontFamily;
+  interface_style: InterfaceStyle;
   menu_layout: "grid" | "list";
-  heading_font: "modern" | "editorial" | "friendly";
+  heading_font: FontFamily;
   density: "comfortable" | "compact";
   show_avatars: boolean;
   welcome_title: string;
   welcome_message: string;
   cover_url: string | null;
+  default_language: "en"|"de"|"tr";
   opening_hours: string;
   plan_id: string;
   active: boolean;
@@ -38,6 +40,7 @@ export type MenuItem = {
   image_url: string | null;
   video_url: string | null;
   available: boolean;
+  archived: boolean;
 };
 export type OrderItem = {
   id: string;

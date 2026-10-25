@@ -97,3 +97,13 @@ Settings now also includes style presets, independent heading fonts, compact/com
 `/platform` (also `/login/platform`) is a separate app-admin console with its own sign-in screen. Existing `platform_admins` membership is required and checked by Supabase; restaurant owners cannot self-promote. The console supports restaurant name/slug search, active/suspended filters, package changes, pause/reactivate controls, package capacity reference and recent audit activity. Suspension pauses new guest sessions/orders; staff can finish existing tickets. Account grants must be performed by an authorized backend operator after the intended email is identified.
 
 Explicit Sign out buttons are present in workspace headers, sidebars, signed-in guest account dialogs, the landing page and app-admin console. Sign-out uses the current-browser scope, checks the Auth result, and navigates to a fresh page without refreshing the old user's workspace. Other devices remain signed in. Errors are shown rather than silently ignored.
+
+## Restaurant identity and personnel
+
+The SaaS operator signs in at `/login/platform`. Restaurant owners and employees use role portals, then enter their restaurant at `/r/{slug}/{admin|kitchen|service}`. New owners complete a three-step setup with ten interface styles, ten local font stacks, logo upload, colors, contact details, language and theme. Existing restaurants can change these settings without repeating setup.
+
+The Team screen records employee name, email, phone, employee ID, photo and role. Employees register through their role link and confirm the matching email; pending assignments are claimed at login. Photos live in a private bucket, visible only to restaurant administrators and the employee. Removing an employee revokes membership and clears table assignments. Archived profiles can be restored.
+
+Menu items are archived and tables deactivated to preserve order history. Categories can be renamed or removed. Restoring records respects package capacity. Global English/German/Turkish and light/dark preferences are saved per browser; restaurant language/theme defaults apply until a visitor chooses their own preference. Authored menu content is not automatically translated. Font availability uses local system fallbacks.
+
+Guest ordering supports touch/pointer dragging to a visible drop target, ordinary add buttons, quantity controls, explicit removal and live feedback. Motion respects reduced-motion preferences.

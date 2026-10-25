@@ -6,8 +6,8 @@ import { money } from "../lib/utils";
 describe("Turkish interface coverage", () => {
   it("has a Turkish translation for every core interface key", () => {
     for (const [key, value] of Object.entries(en)) {
-      expect(Object.hasOwn(dictionary,value),key).toBe(true);
-      expect(tr[key as keyof typeof en],key).toBeTruthy();
+      expect(Object.hasOwn(dictionary, value), key).toBe(true);
+      expect(tr[key as keyof typeof en], key).toBeTruthy();
     }
   });
   it("translates authored copy without changing restaurant-authored data", () => {
@@ -20,4 +20,14 @@ describe("Turkish interface coverage", () => {
   it("formats amounts for Turkish readers", () => {
     expect(money(123456, "EUR", "tr")).toContain("1.234,56");
   });
+});
+
+it("keeps the shared German and Turkish catalogues in sync", async () => {
+  const german = (await import("../lib/german.json")).default;
+  expect(
+    Object.keys(dictionary).filter((k) => !Object.hasOwn(german, k)),
+  ).toEqual([]);
+  setTranslationLocale("de");
+  expect(translateText("Employee profiles")).toBe("Mitarbeiterprofile");
+  setTranslationLocale("en");
 });

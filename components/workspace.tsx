@@ -47,8 +47,13 @@ import {
 } from "@/lib/types";
 import { PortalLogin } from "./portal-login";
 import { RoleAvatar } from "./role-avatar";
+import { RestaurantOnboarding } from "./restaurant-onboarding";
+import { ArchivedMenu } from "./archived-menu";
+import { ProfileMenu } from "./profile-menu";
 import { SignOutButton } from "./sign-out-button";
 import { BrandingSettings } from "./branding-settings";
+import { EmployeeManager } from "./employee-manager";
+import { ResourceControls } from "./resource-controls";
 import { StaffDirectory } from "./staff-directory";
 import { brandingAttributes, brandingStyle } from "@/lib/branding";
 import {
@@ -70,9 +75,12 @@ type Page =
   | "team"
   | "settings"
   | "platform";
-export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
+export function Workspace({
+  initialPortal,
+  tenantSlug,
+}: { initialPortal?: Portal; tenantSlug?: string } = {}) {
   const { locale, setLocale } = usePreferences();
-  const w = useWorkspace(initialPortal);
+  const w = useWorkspace(initialPortal, tenantSlug);
   const [page, setPage] = useState<Page>("overview"),
     [sidebar, setSidebar] = useState(false),
     [auth, setAuth] = useState(false),
@@ -116,6 +124,39 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
     (w.role === "owner" || w.role === "admin") && currentPortal === "admin";
   const brand = w.restaurant ?? w.previewBrand;
   useEffect(() => {
+    if (brand?.name) document.title = brand.name;
+  }, [brand?.name]);
+  useEffect(() => {
+    if (
+      w.user &&
+      !w.user.is_anonymous &&
+      w.restaurant &&
+      w.role &&
+      !w.guestToken &&
+      !tenantSlug &&
+      canUsePortal(w.role, currentPortal)
+    )
+      location.replace(
+        `/r/${encodeURIComponent(w.restaurant.slug)}/${currentPortal}`,
+      );
+    else if (w.platformAdmin && !w.role && !w.guestToken && !w.loading)
+      location.replace("/platform");
+  }, [
+    w.user,
+    w.restaurant,
+    w.role,
+    w.guestToken,
+    w.platformAdmin,
+    w.loading,
+    tenantSlug,
+    currentPortal,
+  ]);
+  useEffect(() => {
+    if (brand?.default_language && !localStorage.getItem("mise:language"))
+      setLocale(brand.default_language);
+  }, [brand?.default_language]);
+
+  useEffect(() => {
     setPage(
       currentPortal === "kitchen"
         ? "kitchen"
@@ -155,12 +196,14 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
     });
   };
   const transition = (o: Order, next: Status) =>
-    run(() =>
-      rpc("transition_order", {
-        p_order: o.id,
-        p_expected: o.status,
-        p_next: next,
-      }),
+    run(
+      () =>
+        rpc("transition_order", {
+          p_order: o.id,
+          p_expected: o.status,
+          p_next: next,
+        }),
+      t("success"),
     );
   const submitModal = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -401,6 +444,16 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
       />
     );
   if (
+    w.user &&
+    !w.restaurant &&
+    !w.platformAdmin &&
+    !tenantSlug &&
+    !w.loading &&
+    currentPortal === "admin" &&
+    !w.error
+  )
+    return <RestaurantOnboarding />;
+  if (
     (!w.role && currentPortal !== "admin") ||
     (w.role && !canUsePortal(w.role, currentPortal))
   )
@@ -440,7 +493,7 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
           )}
           <Button onClick={() => void w.refresh()}>{t("retry")}</Button>
           <SignOutButton
-            redirect={`/login/${currentPortal}`}
+            redirect={`/login/${currentPortal}${w.restaurant?.slug ? `?restaurant=${encodeURIComponent(w.restaurant.slug)}` : ""}`}
             label={t("signOut")}
           />
           {w.error && <p role="alert">{w.error}</p>}
@@ -478,14 +531,20 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
             )}
           </span>
           <div>
-            <strong>{w.restaurant?.name || "Your restaurant"}</strong>
-            <span>{w.restaurant?.plan_id || "Your next chapter"}</span>
+            <strong>{w.restaurant?.name || tx("Your restaurant")}</strong>
+            <span>{w.restaurant?.plan_id || tx("Your next chapter")}</span>
           </div>
           {w.restaurants.length > 1 ? (
             <select
               aria-label={tx("Choose restaurant")}
               value={w.restaurantId}
-              onChange={(e) => w.setRestaurantId(e.target.value)}
+              onChange={(e) => {
+                const next = w.restaurants.find((r) => r.id === e.target.value);
+                if (next)
+                  location.assign(
+                    `/r/${encodeURIComponent(next.slug)}/${currentPortal}`,
+                  );
+              }}
             >
               {w.restaurants.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -603,7 +662,7 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
             </span>
           </div>
           <SignOutButton
-            redirect={`/login/${currentPortal}`}
+            redirect={`/login/${currentPortal}${w.restaurant?.slug ? `?restaurant=${encodeURIComponent(w.restaurant.slug)}` : ""}`}
             label={t("signOut")}
           />
         </div>
@@ -627,13 +686,23 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
             >
               <MenuIcon />
             </Button>
-            <span>{w.restaurant?.name || "Restaurant workspace"}</span>
+            <span>{w.restaurant?.name || tx("Restaurant workspace")}</span>
             <span>/</span>
             <strong>{t(safePage)}</strong>
           </div>
           <div className="topbar-actions">
+            {w.user && w.restaurant && (
+              <ProfileMenu
+                restaurantId={w.restaurantId}
+                userId={w.user.id}
+                email={w.user.email || ""}
+                portal={currentPortal}
+                slug={w.restaurant.slug}
+                onSettings={admin ? () => navigate("settings") : undefined}
+              />
+            )}
             <SignOutButton
-              redirect={`/login/${currentPortal}`}
+              redirect={`/login/${currentPortal}${w.restaurant?.slug ? `?restaurant=${encodeURIComponent(w.restaurant.slug)}` : ""}`}
               label={t("signOut")}
             />
             <span
@@ -717,11 +786,6 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
                 <Plus size={17} />
                 {t("addTable")}
               </Button>
-            ) : safePage === "team" && admin ? (
-              <Button onClick={() => setModal("staff")}>
-                <Plus size={17} />
-                {t("addStaff")}
-              </Button>
             ) : null}
           </div>
           {(!supabase || !w.user) && (
@@ -751,60 +815,6 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
                 <ArrowRight size={16} />
               </Button>
             </div>
-          )}
-          {w.user && !w.restaurant && !w.loading && !w.guestToken && (
-            <section className="panel onboarding">
-              <h2>{t("createRestaurant")}</h2>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const f = new FormData(e.currentTarget);
-                  void run(async () => {
-                    const slug = String(f.get("slug") ?? "")
-                      .trim()
-                      .toLowerCase();
-                    if (!isRestaurantSlug(slug)) throw new Error(t("slugHint"));
-                    try {
-                      await rpc("create_restaurant", {
-                        p_name: f.get("name"),
-                        p_slug: slug,
-                      });
-                    } catch (error) {
-                      if (
-                        error &&
-                        typeof error === "object" &&
-                        "code" in error &&
-                        error.code === "23505"
-                      ) {
-                        throw new Error(t("slugTaken"));
-                      }
-                      throw error;
-                    }
-                  }, t("success"));
-                }}
-              >
-                <Field label={t("name")}>
-                  <input name="name" required minLength={2} maxLength={100} />
-                </Field>
-                <Field label={t("slug")}>
-                  <input
-                    name="slug"
-                    required
-                    pattern={RESTAURANT_SLUG_PATTERN}
-                    minLength={3}
-                    maxLength={61}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    aria-describedby="restaurant-slug-hint"
-                    title={t("slugHint")}
-                    placeholder="greenbites"
-                  />
-                  <small id="restaurant-slug-hint">{t("slugHint")}</small>
-                </Field>
-                <Button disabled={busy}>{t("createRestaurant")}</Button>
-              </form>
-            </section>
           )}
           {(w.error || actionError) && (
             <div className="error-banner" role="alert">
@@ -932,19 +942,19 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
                       {
                         icon: BookOpen,
                         label: t("menu"),
-                        value: `${w.menu.filter((i) => i.available).length} available items`,
+                        value: `${w.menu.filter((i) => i.available).length} ${tx("available items")}`,
                         page: "menu",
                       },
                       {
                         icon: Table2,
                         label: t("tables"),
-                        value: `${w.tables.length} tables in your space`,
+                        value: `${w.tables.length} ${tx("tables in your space")}`,
                         page: "tables",
                       },
                       {
                         icon: MessageSquare,
                         label: t("feedback"),
-                        value: `${w.feedback.length} guest reflections`,
+                        value: `${w.feedback.length} ${tx("guest reflections")}`,
                         page: "feedback",
                       },
                     ].map((x) => (
@@ -962,6 +972,13 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
                     ))}
                   </div>
                 </>
+              )}
+              {safePage === "menu" && admin && (
+                <ArchivedMenu
+                  restaurantId={w.restaurantId}
+                  revision={JSON.stringify(w.menu)}
+                  run={run}
+                />
               )}
               {safePage === "menu" && (
                 <section className="panel">
@@ -993,6 +1010,23 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
                       </Button>
                     )}
                   </div>
+                  {admin && w.categories.length > 0 && (
+                    <details className="panel category-management">
+                      <summary>{tx("Edit or delete categories")}</summary>
+                      {w.categories.map((c) => (
+                        <div className="order-row" key={c.id}>
+                          <strong>{c.name}</strong>
+                          <ResourceControls
+                            restaurantId={w.restaurantId}
+                            id={c.id}
+                            name={c.name}
+                            kind="category"
+                            run={run}
+                          />
+                        </div>
+                      ))}
+                    </details>
+                  )}
                   {w.menu.length ? (
                     <div className="menu-grid">
                       {w.menu
@@ -1032,6 +1066,15 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
                                   {tx("Allergens:")}
                                   {item.allergens.join(", ")}
                                 </small>
+                              )}
+                              {admin && (
+                                <ResourceControls
+                                  restaurantId={w.restaurantId}
+                                  id={item.id}
+                                  name={item.name}
+                                  kind="menu"
+                                  run={run}
+                                />
                               )}
                               {admin && (
                                 <Button
@@ -1086,6 +1129,16 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
                           </span>
                         </div>
                         <h2>{table.name}</h2>
+                        {admin && (
+                          <ResourceControls
+                            restaurantId={w.restaurantId}
+                            id={table.id}
+                            name={table.name}
+                            kind="table"
+                            removed={!table.active}
+                            run={run}
+                          />
+                        )}
                         <p>
                           {table.active
                             ? tx("Open for guests")
@@ -1211,11 +1264,11 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
                 </section>
               )}
               {safePage === "team" && w.restaurant && admin && (
-                <StaffDirectory
+                <EmployeeManager
                   restaurantId={w.restaurantId}
                   slug={w.restaurant.slug}
-                  refreshKey={JSON.stringify(w.memberships)}
-                  locale={locale}
+                  owner={w.role === "owner"}
+                  onChanged={() => void w.refresh()}
                 />
               )}
               {safePage === "settings" && w.restaurant && admin && (
@@ -1271,7 +1324,8 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
           </AnimatePresence>
           <footer>
             <span>
-              mise<span className="footer-star">✳</span>
+              {w.restaurant?.name}
+              <span className="footer-star">✳</span>
             </span>
             <p>{tx("Thoughtfully made for the people behind the plate.")}</p>
             <span className="footer-secure">
@@ -1398,6 +1452,20 @@ export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
                     accept="image/jpeg,image/png,image/webp"
                   />
                 </Field>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={(e) => {
+                    for (const name of ["image_url", "image"]) {
+                      const input = e.currentTarget.form?.elements.namedItem(
+                        name,
+                      ) as HTMLInputElement | null;
+                      if (input) input.value = "";
+                    }
+                  }}
+                >
+                  {tx("Remove image")}
+                </Button>
                 <Field label={tx("Video URL")}>
                   <input
                     name="video_url"

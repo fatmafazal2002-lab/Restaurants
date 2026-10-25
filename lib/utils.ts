@@ -14,6 +14,16 @@ export function money(cents: number, currency = "EUR", locale = "en") {
   ).format(cents / 100);
 }
 export function errorMessage(error: unknown) {
+  const code =
+    typeof error === "object" && error && "code" in error
+      ? String(error.code)
+      : "";
+  if (code === "23505")
+    return translateText(
+      "This value is already in use. Check the email, employee ID or name.",
+    );
+  if (code === "23514" || code === "23502")
+    return translateText("Check the form values and required fields.");
   return translateText(
     error instanceof Error
       ? error.message

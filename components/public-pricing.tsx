@@ -73,7 +73,7 @@ export function PublicPricing() {
                 {p.features.map((f) => (
                   <li key={f.code}>
                     <Check size={16} />
-                    {locale === "tr" ? f.name_tr : f.name}
+                    {locale === "tr" ? f.name_tr : tx(f.name)}
                   </li>
                 ))}
               </ul>

@@ -85,11 +85,9 @@ export function StaffDirectory({
       <section className="panel">
         <h2>{de ? "Ihr Team" : tx("Your team")}</h2>
         <p className="role-note">
-          {de
-            ? "Mitarbeiter registrieren sich über ihren Login-Link. Danach können Sie ihrer E-Mail eine Rolle zuweisen. Ändern Sie Rollen über „Mitarbeiterrolle zuweisen“."
-            : tx(
-                "Staff register using their login link. Then assign their email a role. Use “Assign staff role” to add people or change an existing role.",
-              )}
+          {tx(
+            "Add employee profiles above, then share the matching role login link. Employees must verify their email address.",
+          )}
         </p>
         {error && (
           <p role="alert" className="error-text">

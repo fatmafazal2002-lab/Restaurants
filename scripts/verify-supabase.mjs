@@ -102,6 +102,42 @@ try {
       p_role: "cook",
     }),
   );
+  const employeeId = await checked(
+    owner.client.rpc("save_employee", {
+      p_restaurant: restaurant,
+      p_id: null,
+      p_data: {
+        name: "Pending verification employee",
+        email: `pending-${randomUUID()}@example.com`,
+        phone: "+49 000",
+        employee_id: "CHECK-01",
+        role: "waiter",
+      },
+    }),
+  );
+  const profiles = await checked(
+    owner.client
+      .from("employee_profiles")
+      .select("id,name,email")
+      .eq("restaurant_id", restaurant),
+  );
+  assert.ok(profiles.some((e) => e.id === employeeId));
+  const cookProfiles = await checked(
+    cook.client
+      .from("employee_profiles")
+      .select("user_id")
+      .eq("restaurant_id", restaurant),
+  );
+  assert.equal(cookProfiles.length, 1);
+  await checked(
+    owner.client.rpc("remove_employee", {
+      p_restaurant: restaurant,
+      p_id: employeeId,
+    }),
+  );
+  console.log(
+    "PASS: tenant employee profiles, pending registration and private staff visibility.",
+  );
   const elevation = await manager.client.rpc("add_staff", {
     p_restaurant: restaurant,
     p_email: waiter.email,
@@ -119,8 +155,9 @@ try {
     welcome_title: "Welcome to the test kitchen",
     welcome_message: "A temporary verification fixture",
     cover_url: "https://example.com/cover.webp",
-    font_family: "editorial",
-    interface_style: "soft",
+    font_family: "geometric",
+    interface_style: "botanical",
+    default_language: "tr",
     menu_layout: "list",
     address: "Verification address",
     phone: "+49 000 000",
@@ -142,7 +179,8 @@ try {
     owner.client.from("restaurants").select("*").eq("id", restaurant).single(),
   );
   assert.equal(savedBrand.theme_mode, "dark");
-  assert.equal(savedBrand.font_family, "editorial");
+  assert.equal(savedBrand.font_family, "geometric");
+  assert.equal(savedBrand.default_language, "tr");
   assert.equal(savedBrand.phone, "+49 000 000");
   const publicClient = makeClient();
   const publicBrand = await checked(
@@ -395,6 +433,25 @@ try {
   await checked(
     owner.client.storage.from("restaurant-media").remove([objectPath]),
   );
+  const photoPath = `${restaurant}/verification-${randomUUID()}.png`;
+  await checked(
+    owner.client.storage
+      .from("employee-photos")
+      .upload(photoPath, png, { contentType: "image/png" }),
+  );
+  try {
+    const deniedPhoto = await waiter.client.storage
+      .from("employee-photos")
+      .download(photoPath);
+    assert.ok(deniedPhoto.error);
+    await checked(
+      owner.client.storage.from("employee-photos").download(photoPath),
+    );
+  } finally {
+    await checked(
+      owner.client.storage.from("employee-photos").remove([photoPath]),
+    );
+  }
   console.log("PASS: real Supabase Storage upload and removal.");
   const operator = await account("platform");
   assert.equal(await checked(owner.client.rpc("is_platform_admin", {})), false);
@@ -437,24 +494,98 @@ try {
       p_active: true,
     }),
   );
-  const forbiddenAnalytics=await owner.client.rpc("platform_analytics",{p_days:30});
+  const forbiddenAnalytics = await owner.client.rpc("platform_analytics", {
+    p_days: 30,
+  });
   assert.ok(forbiddenAnalytics.error);
-  await checked(operator.client.rpc("platform_save_feature",{p_code:temporaryFeature,p_name:"Verification feature",p_name_tr:"Doğrulama özelliği",p_description:"Temporary fixture"}));
-  const temporaryData={name:"Verification package",table_limit:20,staff_limit:12,menu_limit:150,monthly_price_cents:7500,currency:"EUR",description:"Temporary fixture",description_tr:"Geçici doğrulama",published:false};
-  await checked(operator.client.rpc("platform_save_plan",{p_id:temporaryPlan,p_data:temporaryData,p_features:[temporaryFeature]}));
-  const publicCatalogue=await checked(makeClient().rpc("get_public_plans",{}));
-  assert.ok(publicCatalogue.some(p=>p.id==="starter" && p.monthly_price_cents>=0));
-  assert.equal(publicCatalogue.some(p=>p.id===temporaryPlan),false);
-  await checked(operator.client.rpc("platform_update_restaurant",{p_restaurant:restaurant,p_plan:temporaryPlan,p_active:true}));
-  const blockedOrder=await guest.rpc("place_order",{...payload,p_key:randomUUID()});
+  await checked(
+    operator.client.rpc("platform_save_feature", {
+      p_code: temporaryFeature,
+      p_name: "Verification feature",
+      p_name_tr: "Doğrulama özelliği",
+      p_description: "Temporary fixture",
+    }),
+  );
+  const temporaryData = {
+    name: "Verification package",
+    table_limit: 20,
+    staff_limit: 12,
+    menu_limit: 150,
+    monthly_price_cents: 7500,
+    currency: "EUR",
+    description: "Temporary fixture",
+    description_tr: "Geçici doğrulama",
+    published: false,
+  };
+  await checked(
+    operator.client.rpc("platform_save_plan", {
+      p_id: temporaryPlan,
+      p_data: temporaryData,
+      p_features: [temporaryFeature],
+    }),
+  );
+  const publicCatalogue = await checked(
+    makeClient().rpc("get_public_plans", {}),
+  );
+  assert.ok(
+    publicCatalogue.some(
+      (p) => p.id === "starter" && p.monthly_price_cents >= 0,
+    ),
+  );
+  assert.equal(
+    publicCatalogue.some((p) => p.id === temporaryPlan),
+    false,
+  );
+  await checked(
+    operator.client.rpc("platform_update_restaurant", {
+      p_restaurant: restaurant,
+      p_plan: temporaryPlan,
+      p_active: true,
+    }),
+  );
+  const blockedOrder = await guest.rpc("place_order", {
+    ...payload,
+    p_key: randomUUID(),
+  });
   assert.ok(blockedOrder.error?.message.includes("Feature is not included"));
-  const report=await checked(operator.client.rpc("platform_analytics",{p_days:7}));
-  assert.equal(report.days,7);assert.equal(report.daily.length,7);assert.ok(report.orders>=2);assert.ok(report.currency_totals.some(t=>t.currency==="EUR"&&Number(t.served_value_cents)>0));
-  await checked(operator.client.rpc("platform_save_plan",{p_id:temporaryPlan,p_data:{...temporaryData,monthly_price_cents:8000},p_features:[temporaryFeature]}));
-  const changeLog=await checked(operator.client.from("platform_audit").select("before_data,after_data").eq("entity",temporaryPlan).order("id",{ascending:false}).limit(1));
-  assert.equal(changeLog[0].before_data.plan.monthly_price_cents,7500);assert.equal(changeLog[0].after_data.plan.monthly_price_cents,8000);
-  await checked(operator.client.rpc("platform_update_restaurant",{p_restaurant:restaurant,p_plan:"starter",p_active:true}));
-  console.log("PASS: aggregate analytics, catalogue prices, feature enforcement, private reporting and before/after audit history.");
+  const report = await checked(
+    operator.client.rpc("platform_analytics", { p_days: 7 }),
+  );
+  assert.equal(report.days, 7);
+  assert.equal(report.daily.length, 7);
+  assert.ok(report.orders >= 2);
+  assert.ok(
+    report.currency_totals.some(
+      (t) => t.currency === "EUR" && Number(t.served_value_cents) > 0,
+    ),
+  );
+  await checked(
+    operator.client.rpc("platform_save_plan", {
+      p_id: temporaryPlan,
+      p_data: { ...temporaryData, monthly_price_cents: 8000 },
+      p_features: [temporaryFeature],
+    }),
+  );
+  const changeLog = await checked(
+    operator.client
+      .from("platform_audit")
+      .select("before_data,after_data")
+      .eq("entity", temporaryPlan)
+      .order("id", { ascending: false })
+      .limit(1),
+  );
+  assert.equal(changeLog[0].before_data.plan.monthly_price_cents, 7500);
+  assert.equal(changeLog[0].after_data.plan.monthly_price_cents, 8000);
+  await checked(
+    operator.client.rpc("platform_update_restaurant", {
+      p_restaurant: restaurant,
+      p_plan: "starter",
+      p_active: true,
+    }),
+  );
+  console.log(
+    "PASS: aggregate analytics, catalogue prices, feature enforcement, private reporting and before/after audit history.",
+  );
   const signedOut = await operator.client.auth.signOut({ scope: "local" });
   if (signedOut.error) throw signedOut.error;
   const sessionAfter = await operator.client.auth.getSession();
@@ -493,9 +624,14 @@ try {
       restaurant,
     ]);
   }
-  await pool.query("delete from public.plans where id=$1",[temporaryPlan]);
-  await pool.query("delete from public.plan_features where code=$1",[temporaryFeature]);
-  await pool.query("delete from public.platform_audit where actor_id=any($1::uuid[])",[users]);
+  await pool.query("delete from public.plans where id=$1", [temporaryPlan]);
+  await pool.query("delete from public.plan_features where code=$1", [
+    temporaryFeature,
+  ]);
+  await pool.query(
+    "delete from public.platform_audit where actor_id=any($1::uuid[])",
+    [users],
+  );
   for (const user of users) await checked(admin.auth.admin.deleteUser(user));
   await pool.end();
   console.log(

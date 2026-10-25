@@ -49,7 +49,7 @@ async function place(
 }
 beforeAll(async () => {
   await db.exec(`create role anon;create role authenticated;create schema auth;create schema storage;
- create table auth.users(id uuid primary key,email text,is_anonymous boolean default false);
+ create table auth.users(id uuid primary key,email text,is_anonymous boolean default false,email_confirmed_at timestamptz default now());
  create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
  create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;
  grant usage on schema auth,public to authenticated,anon;
@@ -805,5 +805,232 @@ describe("platform catalogue and transparent reporting", () => {
     } finally {
       await db.exec("rollback");
     }
+  });
+});
+
+describe("Tenant identity and personnel", () => {
+  it("saves every interface/font and exposes the default language in public branding", async () => {
+    await asUser(owner, async () => {
+      const styles = [
+        "classic",
+        "soft",
+        "minimal",
+        "editorial",
+        "bistro",
+        "cafe",
+        "botanical",
+        "midnight",
+        "coastal",
+        "playful",
+      ];
+      const fonts = [
+        "modern",
+        "editorial",
+        "friendly",
+        "geometric",
+        "humanist",
+        "mono",
+        "classic",
+        "rounded",
+        "luxury",
+        "condensed",
+      ];
+      for (let i = 0; i < styles.length; i++)
+        await db.query("select public.save_restaurant($1,$2::jsonb)", [
+          a,
+          JSON.stringify({
+            name: "Restaurant A",
+            brand_color: "#336699",
+            interface_style: styles[i],
+            font_family: fonts[i],
+            heading_font: fonts[i],
+            default_language: "tr",
+          }),
+        ]);
+      const result = await db.query<{
+        brand: { default_language: string; interface_style: string };
+      }>("select public.get_public_branding('restaurant-a',null) brand");
+      expect(result.rows[0].brand.default_language).toBe("tr");
+      expect(result.rows[0].brand.interface_style).toBe("playful");
+    });
+  });
+  it("saves a verified employee and revokes access when removed", async () => {
+    await asUser(owner, async () => {
+      const result = await db.query<{ eid: string }>(
+        "select public.save_employee($1,null,$2::jsonb) eid",
+        [
+          a,
+          JSON.stringify({
+            name: "Chef",
+            email: "cook@example.com",
+            phone: "+49 1234",
+            employee_id: "C-01",
+            role: "cook",
+          }),
+        ],
+      );
+      const eid = result.rows[0].eid;
+      expect(
+        (
+          await db.query("select * from public.employee_profiles where id=$1", [
+            eid,
+          ])
+        ).rows,
+      ).toHaveLength(1);
+      await db.query("select public.remove_employee($1,$2)", [a, eid]);
+      expect(
+        (
+          await db.query(
+            "select * from public.memberships where restaurant_id=$1 and user_id=$2",
+            [a, cook],
+          )
+        ).rows,
+      ).toHaveLength(0);
+      await db.query("select public.save_employee($1,$2,$3::jsonb)", [
+        a,
+        eid,
+        JSON.stringify({
+          name: "Chef",
+          email: "cook@example.com",
+          employee_id: "C-01",
+          role: "cook",
+        }),
+      ]);
+      expect(
+        (
+          await db.query(
+            "select * from public.memberships where restaurant_id=$1 and user_id=$2",
+            [a, cook],
+          )
+        ).rows,
+      ).toHaveLength(1);
+    });
+  });
+  it("denies employee management to cooks and across restaurants", async () => {
+    const data = JSON.stringify({
+      name: "Staff",
+      email: "staff@example.com",
+      employee_id: "S-01",
+      role: "waiter",
+    });
+    await expect(
+      asUser(cook, () =>
+        db.query("select public.save_employee($1,null,$2::jsonb)", [a, data]),
+      ),
+    ).rejects.toThrow(/Not authorized/);
+    await expect(
+      asUser(otherOwner, () =>
+        db.query("select public.save_employee($1,null,$2::jsonb)", [a, data]),
+      ),
+    ).rejects.toThrow(/Not authorized/);
+    await expect(
+      asUser(owner, () =>
+        db.query("select public.save_employee($1,null,$2::jsonb)", [
+          a,
+          JSON.stringify({
+            name: "Owner",
+            email: "owner@example.com",
+            employee_id: "O-01",
+            role: "cook",
+          }),
+        ]),
+      ),
+    ).rejects.toThrow(/owner account/);
+  });
+  it("claims pending access only for a confirmed email and keeps personnel data tenant private", async () => {
+    const pending = id(801),
+      eid = id(802);
+    await db.query(
+      "insert into auth.users(id,email,email_confirmed_at) values($1,'pending@example.com',null)",
+      [pending],
+    );
+    await db.query(
+      "insert into public.employee_profiles(id,restaurant_id,name,email,employee_id,role) values($1,$2,'Pending','pending@example.com','P-01','cook')",
+      [eid, a],
+    );
+    try {
+      await asUser(pending, async () => {
+        await db.exec("select public.claim_employee_access()");
+        expect(
+          (
+            await db.query(
+              "select * from public.memberships where user_id=$1",
+              [pending],
+            )
+          ).rows,
+        ).toHaveLength(0);
+      });
+      await db.query(
+        "update auth.users set email_confirmed_at=now() where id=$1",
+        [pending],
+      );
+      await asUser(pending, async () => {
+        await db.exec("select public.claim_employee_access()");
+        expect(
+          (
+            await db.query(
+              "select * from public.memberships where user_id=$1",
+              [pending],
+            )
+          ).rows,
+        ).toHaveLength(1);
+        expect(
+          (await db.query("select * from public.employee_profiles")).rows,
+        ).toHaveLength(1);
+      });
+      await asUser(otherOwner, async () =>
+        expect(
+          (
+            await db.query(
+              "select * from public.employee_profiles where restaurant_id=$1",
+              [a],
+            )
+          ).rows,
+        ).toHaveLength(0),
+      );
+    } finally {
+      await db.query("delete from public.employee_profiles where id=$1", [eid]);
+      await db.query("delete from auth.users where id=$1", [pending]);
+    }
+  });
+  it("archives items without deleting historical data and allows restoration", async () => {
+    await asUser(owner, async () => {
+      await db.query(
+        "select public.manage_restaurant_resource($1,'menu',$2,null,true)",
+        [a, menuA],
+      );
+      expect(
+        (
+          await db.query<{ archived: boolean; available: boolean }>(
+            "select archived,available from public.menu_items where id=$1",
+            [menuA],
+          )
+        ).rows[0],
+      ).toEqual({ archived: true, available: false });
+      await db.query(
+        "select public.manage_restaurant_resource($1,'menu',$2,null,false)",
+        [a, menuA],
+      );
+      expect(
+        (
+          await db.query<{ archived: boolean }>(
+            "select archived from public.menu_items where id=$1",
+            [menuA],
+          )
+        ).rows[0].archived,
+      ).toBe(false);
+      await db.query(
+        "select public.manage_restaurant_resource($1,'table',$2,null,true)",
+        [a, ta],
+      );
+      expect(
+        (
+          await db.query<{ active: boolean }>(
+            "select active from public.dining_tables where id=$1",
+            [ta],
+          )
+        ).rows[0].active,
+      ).toBe(false);
+    });
   });
 });
