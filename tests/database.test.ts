@@ -1,6 +1,6 @@
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 // Runs production SQL against embedded PostgreSQL. Only Supabase-owned auth/storage
 // schemas are compatibility fixtures. This does not emulate Realtime or HTTP Auth.
 const db = new PGlite();
@@ -59,9 +59,11 @@ beforeAll(async () => {
  grant usage on schema storage to authenticated;grant insert,select,delete on storage.objects to authenticated;
  create function storage.foldername(text) returns text[] language sql as $$select string_to_array($1,'/')$$;
  create publication supabase_realtime;`);
-  await db.exec(
-    readFileSync("supabase/migrations/202610220001_core.sql", "utf8"),
-  );
+  for (const file of readdirSync("supabase/migrations")
+    .filter((f) => f.endsWith(".sql"))
+    .sort()) {
+    await db.exec(readFileSync(`supabase/migrations/${file}`, "utf8"));
+  }
   await db.query(
     "insert into auth.users(id,email,is_anonymous) values ($1,'owner@example.com',false),($2,'other@example.com',false),($3,'cook@example.com',false),($4,'waiter@example.com',false),($5,null,true),($6,null,true),($7,'platform@example.com',false)",
     [owner, otherOwner, cook, waiter, guest, otherGuest, platform],
@@ -374,5 +376,434 @@ describe("ordering and permissions", () => {
         (await db.query("select * from public.service_requests")).rows,
       ).toHaveLength(1);
     });
+  });
+});
+
+describe("restaurant onboarding errors", () => {
+  it("rejects website addresses with actionable guidance rather than a constraint error", async () => {
+    await expect(
+      asUser(platform, () =>
+        db.query(
+          "select public.create_restaurant('Greenbites', 'www.greenbites.com')",
+        ),
+      ),
+    ).rejects.toThrow(/not a website address/);
+  });
+  it("normalizes a valid identifier and assigns the owner atomically", async () => {
+    await asUser(platform, async () => {
+      const created = await db.query<{ id: string }>(
+        "select public.create_restaurant('Greenbites', ' GreenBites ') id",
+      );
+      const row = await db.query<{ slug: string }>(
+        "select slug from public.restaurants where id=$1",
+        [created.rows[0].id],
+      );
+      expect(row.rows[0].slug).toBe("greenbites");
+      const membership = await db.query<{ role: string }>(
+        "select role from public.memberships where restaurant_id=$1",
+        [created.rows[0].id],
+      );
+      expect(membership.rows[0].role).toBe("owner");
+    });
+  });
+  it("returns a helpful duplicate identifier error", async () => {
+    await expect(
+      asUser(platform, () =>
+        db.query(
+          "select public.create_restaurant('Another A', 'restaurant-a')",
+        ),
+      ),
+    ).rejects.toThrow(/already in use/);
+  });
+});
+
+describe("restaurant branding and role management", () => {
+  const settings = {
+    name: "Restaurant A",
+    brand_color: "#3355aa",
+    accent_color: "#b58a56",
+    address: "Test Street 1",
+    phone: "+49 123 456",
+    theme_mode: "dark",
+    font_family: "editorial",
+    interface_style: "soft",
+    menu_layout: "list",
+    logo_url: "https://example.com/logo.png",
+  };
+  it("persists branding for the authorized restaurant", async () => {
+    await asUser(owner, async () => {
+      await db.query("select public.save_restaurant($1,$2::jsonb)", [
+        a,
+        JSON.stringify(settings),
+      ]);
+      const r = await db.query<{
+        theme_mode: string;
+        phone: string;
+        font_family: string;
+      }>(
+        "select theme_mode,phone,font_family from public.restaurants where id=$1",
+        [a],
+      );
+      expect(r.rows[0]).toEqual({
+        theme_mode: "dark",
+        phone: "+49 123 456",
+        font_family: "editorial",
+      });
+    });
+  });
+  it("denies cook and floor-service branding writes", async () => {
+    for (const actor of [cook, waiter])
+      await expect(
+        asUser(actor, () =>
+          db.query("select public.save_restaurant($1,$2::jsonb)", [
+            a,
+            JSON.stringify(settings),
+          ]),
+        ),
+      ).rejects.toThrow(/Not authorized/);
+  });
+  it("rejects unsupported theme values and unsafe logo schemes", async () => {
+    await expect(
+      asUser(owner, () =>
+        db.query("select public.save_restaurant($1,$2::jsonb)", [
+          a,
+          JSON.stringify({ ...settings, theme_mode: "unknown" }),
+        ]),
+      ),
+    ).rejects.toThrow(/check constraint/);
+    await expect(
+      asUser(owner, () =>
+        db.query("select public.save_restaurant($1,$2::jsonb)", [
+          a,
+          JSON.stringify({ ...settings, logo_url: "javascript:alert(1)" }),
+        ]),
+      ),
+    ).rejects.toThrow(/logo URL/);
+  });
+  it("exposes only public presentation fields before guest sign-in", async () => {
+    await db.exec("begin;set local role anon;");
+    try {
+      const r = await db.query<{ brand: Record<string, unknown> }>(
+        "select public.get_public_branding(null,$1) brand",
+        [token],
+      );
+      expect(r.rows[0].brand.name).toBe("Restaurant A");
+      expect(r.rows[0].brand).not.toHaveProperty("plan_id");
+      expect(r.rows[0].brand).not.toHaveProperty("access_token");
+      const invalid = await db.query<{ brand: null }>(
+        "select public.get_public_branding(null,$1) brand",
+        [id(999)],
+      );
+      expect(invalid.rows[0].brand).toBeNull();
+    } finally {
+      await db.exec("rollback");
+    }
+  });
+  it("keeps staff email directory private from cooks and guests", async () => {
+    for (const actor of [cook, waiter, guest])
+      await expect(
+        asUser(actor, () =>
+          db.query("select * from public.list_staff($1)", [a]),
+        ),
+      ).rejects.toThrow(/Not authorized/);
+    await asUser(owner, async () => {
+      const r = await db.query<{ email: string }>(
+        "select * from public.list_staff($1)",
+        [a],
+      );
+      expect(r.rows.some((r) => r.email === "cook@example.com")).toBe(true);
+    });
+  });
+  it("allows admins to manage operational staff but not promote administrators", async () => {
+    await db.query(
+      "insert into public.memberships(restaurant_id,user_id,role) values($1,$2,'admin')",
+      [a, platform],
+    );
+    try {
+      await asUser(platform, async () => {
+        await db.query(
+          "select public.add_staff($1,'cook@example.com','waiter')",
+          [a],
+        );
+        const r = await db.query<{ role: string }>(
+          "select role from public.memberships where restaurant_id=$1 and user_id=$2",
+          [a, cook],
+        );
+        expect(r.rows[0].role).toBe("waiter");
+      });
+      await expect(
+        asUser(platform, () =>
+          db.query("select public.add_staff($1,'waiter@example.com','admin')", [
+            a,
+          ]),
+        ),
+      ).rejects.toThrow(/Not authorized/);
+      await expect(
+        asUser(platform, () =>
+          db.query("select public.add_staff($1,'owner@example.com','cook')", [
+            a,
+          ]),
+        ),
+      ).rejects.toThrow(/Only the owner/);
+    } finally {
+      await db.query(
+        "delete from public.memberships where restaurant_id=$1 and user_id=$2",
+        [a, platform],
+      );
+    }
+  });
+});
+
+describe("expanded restaurant customization", () => {
+  const customization = {
+    name: "Restaurant A",
+    brand_color: "#53634b",
+    heading_font: "friendly",
+    density: "compact",
+    show_avatars: false,
+    welcome_title: "A seat at our table",
+    welcome_message: "Freshly made for you.",
+    cover_url: "https://example.com/cover.webp",
+  };
+  it("persists presentation choices and returns them in the safe public profile", async () => {
+    await asUser(owner, async () => {
+      await db.query("select public.save_restaurant($1,$2::jsonb)", [
+        a,
+        JSON.stringify(customization),
+      ]);
+      const result = await db.query<{ brand: Record<string, unknown> }>(
+        "select public.get_public_branding('restaurant-a') brand",
+      );
+      expect(result.rows[0].brand).toMatchObject({
+        heading_font: "friendly",
+        density: "compact",
+        show_avatars: false,
+        welcome_title: "A seat at our table",
+        cover_url: "https://example.com/cover.webp",
+      });
+      expect(result.rows[0].brand).not.toHaveProperty("plan_id");
+      await db.query("select public.save_restaurant($1,$2::jsonb)", [
+        a,
+        JSON.stringify({ name: "Restaurant A", brand_color: "#53634b" }),
+      ]);
+      const preserved = await db.query<{ brand: Record<string, unknown> }>(
+        "select public.get_public_branding('restaurant-a') brand",
+      );
+      expect(preserved.rows[0].brand.cover_url).toBe(customization.cover_url);
+      await db.query("select public.save_restaurant($1,$2::jsonb)", [
+        a,
+        JSON.stringify({ ...customization, cover_url: "" }),
+      ]);
+      const cleared = await db.query<{ brand: Record<string, unknown> }>(
+        "select public.get_public_branding('restaurant-a') brand",
+      );
+      expect(cleared.rows[0].brand.cover_url).toBeNull();
+    });
+  });
+  it("rejects unsafe covers, invalid layouts, and oversized welcome copy", async () => {
+    for (const invalid of [
+      { cover_url: "javascript:alert(1)" },
+      { density: "invalid" },
+      { heading_font: "invalid" },
+      { welcome_message: "x".repeat(501) },
+    ]) {
+      await expect(
+        asUser(owner, () =>
+          db.query("select public.save_restaurant($1,$2::jsonb)", [
+            a,
+            JSON.stringify({ ...customization, ...invalid }),
+          ]),
+        ),
+      ).rejects.toThrow();
+    }
+  });
+  it("prevents changes to another tenant's customization", async () => {
+    await expect(
+      asUser(otherOwner, () =>
+        db.query("select public.save_restaurant($1,$2::jsonb)", [
+          a,
+          JSON.stringify(customization),
+        ]),
+      ),
+    ).rejects.toThrow(/Not authorized/);
+  });
+  it("provides the advertised enterprise capacity", async () => {
+    const r = await db.query(
+      "select table_limit,staff_limit,menu_limit from public.plans where id='enterprise'",
+    );
+    expect(r.rows[0]).toEqual({
+      table_limit: 200,
+      staff_limit: 100,
+      menu_limit: 2000,
+    });
+  });
+});
+
+describe("platform catalogue and transparent reporting", () => {
+  const planData = {
+    name: "Verification",
+    table_limit: 20,
+    staff_limit: 12,
+    menu_limit: 150,
+    monthly_price_cents: 7500,
+    currency: "EUR",
+    description: "Test package",
+    description_tr: "Test paketi",
+    published: true,
+  };
+  it("denies restaurant owners analytics and catalogue administration", async () => {
+    for (const [sql, args] of [
+      ["select public.platform_analytics(30)", []],
+      [
+        "select public.platform_save_plan('verify',$1::jsonb,array['guest_ordering'])",
+        [JSON.stringify(planData)],
+      ],
+      [
+        "select public.platform_save_feature('verify_feature','Example','Örnek','')",
+        [],
+      ],
+    ] as [string, unknown[]][]) {
+      await expect(asUser(owner, () => db.query(sql, args))).rejects.toThrow(
+        /Not authorized/,
+      );
+    }
+  });
+  it("publishes editable prices and features with before/after audit data", async () => {
+    await asUser(platform, async () => {
+      await db.query(
+        "select public.platform_save_feature('verify_feature','Example','Örnek','Catalogue only')",
+      );
+      await db.query(
+        "select public.platform_save_plan('verify',$1::jsonb,array['guest_ordering','verify_feature'])",
+        [JSON.stringify(planData)],
+      );
+      const result = await db.query<{
+        plans: {
+          id: string;
+          monthly_price_cents: number;
+          features: { code: string }[];
+        }[];
+      }>("select public.get_public_plans() plans");
+      const plan = result.rows[0].plans.find((p) => p.id === "verify");
+      expect(plan?.monthly_price_cents).toBe(7500);
+      expect(plan?.features.map((f) => f.code)).toEqual([
+        "guest_ordering",
+        "verify_feature",
+      ]);
+      await db.query(
+        "select public.platform_save_plan('verify',$1::jsonb,array['guest_ordering'])",
+        [
+          JSON.stringify({
+            ...planData,
+            monthly_price_cents: 8000,
+            published: false,
+          }),
+        ],
+      );
+      const hidden = await db.query<{ plans: { id: string }[] }>(
+        "select public.get_public_plans() plans",
+      );
+      expect(hidden.rows[0].plans.some((p) => p.id === "verify")).toBe(false);
+      const audit = await db.query<{
+        before_data: { plan: { monthly_price_cents: number } };
+        after_data: { plan: { monthly_price_cents: number } };
+      }>(
+        "select before_data,after_data from public.platform_audit where entity='verify' order by id desc limit 1",
+      );
+      expect(audit.rows[0].before_data.plan.monthly_price_cents).toBe(7500);
+      expect(audit.rows[0].after_data.plan.monthly_price_cents).toBe(8000);
+    });
+  });
+  it("rejects negative prices and unknown feature codes", async () => {
+    await expect(
+      asUser(platform, () =>
+        db.query(
+          "select public.platform_save_plan('verify',$1::jsonb,array['guest_ordering'])",
+          [JSON.stringify({ ...planData, monthly_price_cents: -1 })],
+        ),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      asUser(platform, () =>
+        db.query(
+          "select public.platform_save_plan('verify',$1::jsonb,array['not_real'])",
+          [JSON.stringify(planData)],
+        ),
+      ),
+    ).rejects.toThrow(/Unknown feature/);
+  });
+  it("enforces disabled ordering on the server", async () => {
+    await asUser(platform, async () => {
+      await db.query(
+        "select public.platform_save_plan('verify',$1::jsonb,array[]::text[])",
+        [JSON.stringify(planData)],
+      );
+      await db.query(
+        "select public.platform_update_restaurant($1,'verify',true)",
+        [a],
+      );
+      await db.query("select set_config('request.jwt.claims',$1,true)", [
+        JSON.stringify({ sub: guest, is_anonymous: true }),
+      ]);
+      await expect(place()).rejects.toThrow(/Feature is not included/);
+    });
+  });
+  it("reports source-backed totals by currency and rejects unsupported periods", async () => {
+    const oid = id(800);
+    await db.query(
+      "insert into public.orders(id,restaurant_id,session_id,customer_id,table_name,status,idempotency_key,preparing_at,ready_at,served_at) values($1,$2,$3,$4,'Test','served',$5,now()-interval '10 minutes',now()-interval '5 minutes',now())",
+      [oid, a, session, guest, id(801)],
+    );
+    await db.query(
+      "insert into public.order_items(restaurant_id,order_id,menu_item_id,name,price_cents,quantity,cancelled) values($1,$2,$3,'Served',1000,2,false),($1,$2,$3,'Cancelled line',99900,1,true)",
+      [a, oid, menuA],
+    );
+    try {
+      await asUser(platform, async () => {
+        const result = await db.query<{
+          report: {
+            orders: number;
+            served: number;
+            avg_preparation_minutes: number;
+            currency_totals: { currency: string; served_value_cents: number }[];
+            daily: unknown[];
+          };
+        }>("select public.platform_analytics(7) report");
+        expect(result.rows[0].report.orders).toBe(1);
+        expect(result.rows[0].report.served).toBe(1);
+        expect(result.rows[0].report.avg_preparation_minutes).toBe(5);
+        expect(result.rows[0].report.currency_totals).toEqual([
+          { currency: "EUR", served_orders: 1, served_value_cents: 2000 },
+        ]);
+        expect(result.rows[0].report.daily).toHaveLength(7);
+      });
+      await expect(
+        asUser(platform, () =>
+          db.query("select public.platform_analytics(365)"),
+        ),
+      ).rejects.toThrow(/Choose 7/);
+    } finally {
+      await db.query("delete from public.order_items where order_id=$1", [oid]);
+      await db.query("delete from public.orders where id=$1", [oid]);
+    }
+  });
+  it("keeps analytics and the audit log private from anonymous visitors", async () => {
+    await db.exec("begin;set local role anon");
+    try {
+      await expect(
+        db.query("select public.platform_analytics(30)"),
+      ).rejects.toThrow();
+    } finally {
+      await db.exec("rollback");
+    }
+    await db.exec("begin;set local role anon");
+    try {
+      const result = await db.query<{ plans: unknown[] }>(
+        "select public.get_public_plans() plans",
+      );
+      expect(result.rows[0].plans).toHaveLength(3);
+    } finally {
+      await db.exec("rollback");
+    }
   });
 });

@@ -1,3 +1,4 @@
+import turkish from "./turkish.json";
 export const en = {
   overview: "Overview",
   menu: "Menu",
@@ -82,7 +83,11 @@ export const en = {
   register: "Create account",
   registered: "Check your email to confirm your account, then sign in.",
   createRestaurant: "Create restaurant",
-  slug: "Restaurant URL name",
+  slug: "Restaurant identifier",
+  slugHint:
+    "Use 3–61 lowercase letters, numbers or hyphens, starting with a letter or number. For example: greenbites. Do not enter a website address.",
+  slugTaken:
+    "This restaurant identifier is already in use. Please choose another.",
   welcome: "Welcome to the table.",
   browse: "Explore the menu",
   yourOrder: "Your order",
@@ -195,7 +200,11 @@ export const de: Record<TranslationKey, string> = {
   registered:
     "Bestätigen Sie Ihre E-Mail-Adresse und melden Sie sich danach an.",
   createRestaurant: "Restaurant erstellen",
-  slug: "Restaurant-URL-Name",
+  slug: "Restaurant-Kennung",
+  slugHint:
+    "Verwenden Sie 3–61 Kleinbuchstaben, Zahlen oder Bindestriche, beginnend mit einem Buchstaben oder einer Zahl. Zum Beispiel: greenbites. Geben Sie keine Webadresse ein.",
+  slugTaken:
+    "Diese Restaurant-Kennung wird bereits verwendet. Bitte wählen Sie eine andere.",
   welcome: "Willkommen am Tisch.",
   browse: "Speisekarte entdecken",
   yourOrder: "Ihre Bestellung",
@@ -222,3 +231,10 @@ export const de: Record<TranslationKey, string> = {
   edit: "Bearbeiten",
   minutes: "Min.",
 };
+
+export const tr: Record<TranslationKey, string> = Object.fromEntries(
+  Object.entries(en).map(([key, value]) => [
+    key,
+    (turkish as Record<string, string>)[value] ?? value,
+  ]),
+) as Record<TranslationKey, string>;

@@ -9,6 +9,18 @@ export type Restaurant = {
   logo_url: string | null;
   address: string;
   contact: string;
+  phone: string;
+  accent_color: string;
+  theme_mode: "light" | "dark" | "system";
+  font_family: "modern" | "editorial" | "friendly";
+  interface_style: "classic" | "soft" | "minimal";
+  menu_layout: "grid" | "list";
+  heading_font: "modern" | "editorial" | "friendly";
+  density: "comfortable" | "compact";
+  show_avatars: boolean;
+  welcome_title: string;
+  welcome_message: string;
+  cover_url: string | null;
   opening_hours: string;
   plan_id: string;
   active: boolean;

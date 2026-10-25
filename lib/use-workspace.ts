@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
+import { canUsePortal, type Portal } from "./portals";
+import type { Branding } from "./branding";
 import { rpc, supabase } from "./supabase";
 import { errorMessage } from "./utils";
 import type {
@@ -13,7 +15,8 @@ import type {
   Restaurant,
   ServiceRequest,
 } from "./types";
-export function useWorkspace() {
+export function useWorkspace(portal?: Portal) {
+  const [previewBrand, setPreviewBrand] = useState<Branding | null>(null);
   const [user, setUser] = useState<User | null>(null),
     [authReady, setAuthReady] = useState(!supabase);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]),
@@ -36,6 +39,15 @@ export function useWorkspace() {
     identity = useRef<string | null>(null);
   useEffect(() => {
     setGuestToken(new URLSearchParams(location.search).get("table"));
+    const query = new URLSearchParams(location.search);
+    if (supabase && (query.get("table") || query.get("restaurant"))) {
+      void rpc<Branding | null>("get_public_branding", {
+        p_token: query.get("table"),
+        p_slug: query.get("restaurant"),
+      })
+        .then(setPreviewBrand)
+        .catch(() => setPreviewBrand(null));
+    }
     setOnline(navigator.onLine);
     const on = () => setOnline(true),
       off = () => setOnline(false);
@@ -64,6 +76,8 @@ export function useWorkspace() {
         setFeedback([]);
         setSessionId("");
         setPlatformAdmin(false);
+        setLoading(false);
+        setError("");
       }
       setUser(session?.user ?? null);
       setAuthReady(true);
@@ -89,6 +103,8 @@ export function useWorkspace() {
       setSessionId("");
       setRestaurantId("");
       setPlatformAdmin(false);
+      setLoading(false);
+      setError("");
       return;
     }
     setLoading(true);
@@ -124,7 +140,21 @@ export function useWorkspace() {
         ),
       ]);
       if (gen !== generation.current) return;
-      if (!rs.some((r) => r.id === rid)) rid = rs[0]?.id ?? "";
+      if (!rs.some((r) => r.id === rid)) {
+        const branded = rs.find(
+          (r) =>
+            r.slug === new URLSearchParams(location.search).get("restaurant"),
+        );
+        const matching = rs.find((r) =>
+          ms.some(
+            (m) =>
+              m.restaurant_id === r.id &&
+              m.user_id === user.id &&
+              (!portal || canUsePortal(m.role, portal)),
+          ),
+        );
+        rid = branded?.id ?? matching?.id ?? rs[0]?.id ?? "";
+      }
       setRestaurants(rs);
       setMemberships(ms);
       setPlatformAdmin(pa.length > 0);
@@ -221,7 +251,7 @@ export function useWorkspace() {
     } finally {
       if (gen === generation.current) setLoading(false);
     }
-  }, [authReady, user, restaurantId, guestToken]);
+  }, [authReady, user, restaurantId, guestToken, portal]);
   useEffect(() => {
     void refresh();
   }, [refresh, online]);
@@ -246,6 +276,16 @@ export function useWorkspace() {
           reload,
         ),
     );
+    channel.on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "restaurants",
+        filter: `id=eq.${restaurantId}`,
+      },
+      reload,
+    );
     channel.subscribe((status) => {
       setLive(status === "SUBSCRIBED");
       if (status === "SUBSCRIBED") reload();
@@ -260,6 +300,7 @@ export function useWorkspace() {
   }, [restaurantId, user, refresh]);
   return {
     user,
+    previewBrand,
     authReady,
     restaurants,
     restaurantId,

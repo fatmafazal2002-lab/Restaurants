@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { PreferencesProvider } from "@/components/preferences";
+import { MotionProvider } from "@/components/motion-provider";
 export const metadata: Metadata = {
   title: "Mise · A better service",
   description:
@@ -10,7 +12,11 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <PreferencesProvider>
+          <MotionProvider>{children}</MotionProvider>
+        </PreferencesProvider>
+      </body>
     </html>
   );
 }

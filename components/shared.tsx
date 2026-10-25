@@ -1,4 +1,7 @@
 "use client";
+import { translateText as tx } from "@/lib/translation";
+import { usePreferences } from "./preferences";
+
 import { useEffect, useRef, type ReactNode } from "react";
 import { Utensils, X } from "lucide-react";
 import { Button } from "./ui/button";
@@ -11,6 +14,8 @@ export function Field({
   label: string;
   children: ReactNode;
 }) {
+  usePreferences();
+
   return (
     <label className="field">
       <span>{label}</span>
@@ -29,6 +34,8 @@ export function Empty({
   icon?: ReactNode;
   children?: ReactNode;
 }) {
+  usePreferences();
+
   return (
     <div className="empty">
       <div className="empty-icon">{icon}</div>
@@ -47,6 +54,8 @@ export function Modal({
   close: () => void;
   children: ReactNode;
 }) {
+  usePreferences();
+
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -96,7 +105,7 @@ export function Modal({
           <Button
             variant="ghost"
             size="icon"
-            aria-label="Close"
+            aria-label={tx("Close")}
             onClick={close}
           >
             <X size={20} />

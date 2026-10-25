@@ -1,4 +1,7 @@
 "use client";
+import { translateText as tx } from "@/lib/translation";
+
+import { PreferenceControls, usePreferences } from "./preferences";
 import { useEffect, useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -27,9 +30,13 @@ import {
   Utensils,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { en, de, type TranslationKey } from "@/lib/i18n";
+import { en, de, tr, type TranslationKey } from "@/lib/i18n";
 import { useWorkspace } from "@/lib/use-workspace";
 import { rpc, supabase } from "@/lib/supabase";
+import {
+  RESTAURANT_SLUG_PATTERN,
+  isRestaurantSlug,
+} from "@/lib/restaurant-slug";
 import { errorMessage, money } from "@/lib/utils";
 import {
   canTransition,
@@ -38,6 +45,18 @@ import {
   type Order,
   type Status,
 } from "@/lib/types";
+import { PortalLogin } from "./portal-login";
+import { RoleAvatar } from "./role-avatar";
+import { SignOutButton } from "./sign-out-button";
+import { BrandingSettings } from "./branding-settings";
+import { StaffDirectory } from "./staff-directory";
+import { brandingAttributes, brandingStyle } from "@/lib/branding";
+import {
+  canUsePortal,
+  portalForRole,
+  portalTitle,
+  type Portal,
+} from "@/lib/portals";
 import { GuestView } from "./guest-view";
 import { Empty, Field, Modal, type T } from "./shared";
 import { Ticket } from "./ticket";
@@ -51,10 +70,10 @@ type Page =
   | "team"
   | "settings"
   | "platform";
-export function Workspace() {
-  const w = useWorkspace();
+export function Workspace({ initialPortal }: { initialPortal?: Portal } = {}) {
+  const { locale, setLocale } = usePreferences();
+  const w = useWorkspace(initialPortal);
   const [page, setPage] = useState<Page>("overview"),
-    [locale, setLocale] = useState<"en" | "de">("en"),
     [sidebar, setSidebar] = useState(false),
     [auth, setAuth] = useState(false),
     [register, setRegister] = useState(false),
@@ -66,7 +85,7 @@ export function Workspace() {
     >(null),
     [editing, setEditing] = useState<MenuItem | null>(null),
     [filter, setFilter] = useState("all");
-  const t: T = (key) => (locale === "de" ? de : en)[key];
+  const t: T = (key) => (locale === "tr" ? tr : locale === "de" ? de : en)[key];
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
@@ -92,17 +111,31 @@ export function Workspace() {
       setBusy(false);
     }
   };
-  const admin = w.role === "owner" || w.role === "admin";
+  const currentPortal = initialPortal ?? portalForRole(w.role);
+  const admin =
+    (w.role === "owner" || w.role === "admin") && currentPortal === "admin";
+  const brand = w.restaurant ?? w.previewBrand;
+  useEffect(() => {
+    setPage(
+      currentPortal === "kitchen"
+        ? "kitchen"
+        : currentPortal === "service"
+          ? "service"
+          : "overview",
+    );
+  }, [currentPortal]);
   const navigate = (next: Page) => {
     setPage(next);
     setSidebar(false);
     setFilter("all");
   };
   const safePage: Page =
-    w.role === "cook" && !["overview", "kitchen"].includes(page)
+    currentPortal === "kitchen"
       ? "kitchen"
-      : w.role === "waiter" && !["overview", "service", "tables"].includes(page)
-        ? "service"
+      : currentPortal === "service"
+        ? page === "tables"
+          ? "tables"
+          : "service"
         : page;
   const authSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -206,7 +239,8 @@ export function Workspace() {
       label: t("activeOrders"),
       value: String(active.length).padStart(2, "0"),
       icon: ClipboardList,
-      note: locale === "de" ? "In Küche und Service" : "Across kitchen & floor",
+      note:
+        locale === "de" ? "In Küche und Service" : tx("Across kitchen & floor"),
     },
     {
       label: t("readyOrders"),
@@ -218,7 +252,7 @@ export function Workspace() {
       note:
         locale === "de"
           ? "Bereit für Ihre Gäste"
-          : "A little happiness, ready to go",
+          : tx("A little happiness, ready to go"),
     },
     {
       label: t("sales"),
@@ -234,7 +268,7 @@ export function Workspace() {
       note:
         locale === "de"
           ? "Letzte 200 Bestellungen"
-          : "Latest 200 tickets · excludes payments",
+          : tx("Latest 200 tickets · excludes payments"),
     },
     {
       label: t("avgPrep"),
@@ -250,7 +284,7 @@ export function Workspace() {
       note:
         locale === "de"
           ? "Zubereitungsstart bis fertig"
-          : "From preparation to ready",
+          : tx("From preparation to ready"),
     },
   ];
   const title = safePage === "overview" ? t("greeting") : t(safePage);
@@ -258,7 +292,7 @@ export function Workspace() {
     safePage === "overview"
       ? t("overviewSub")
       : safePage === "platform"
-        ? "Restaurants & subscription plans"
+        ? tx("Restaurants & subscription plans")
         : t(
             (
               {
@@ -277,46 +311,65 @@ export function Workspace() {
       title={register ? t("register") : t("signIn")}
       close={() => setAuth(false)}
     >
-      <form onSubmit={authSubmit}>
-        <Field label={t("email")}>
-          <input name="email" type="email" autoComplete="email" required />
-        </Field>
-        <Field label={t("password")}>
-          <input
-            name="password"
-            type="password"
-            minLength={8}
-            autoComplete={register ? "new-password" : "current-password"}
-            required
+      {w.user && !w.user.is_anonymous ? (
+        <div className="account-panel">
+          <p>{w.user.email}</p>
+          <SignOutButton
+            redirect={
+              w.guestToken
+                ? `/?table=${encodeURIComponent(w.guestToken)}`
+                : `/login/${currentPortal}`
+            }
           />
-        </Field>
-        <Button disabled={busy || !supabase} type="submit">
-          {busy ? (
-            <Loader2 className="spin" />
-          ) : register ? (
-            t("register")
-          ) : (
-            t("signIn")
+        </div>
+      ) : (
+        <form onSubmit={authSubmit}>
+          <Field label={t("email")}>
+            <input name="email" type="email" autoComplete="email" required />
+          </Field>
+          <Field label={t("password")}>
+            <input
+              name="password"
+              type="password"
+              minLength={8}
+              autoComplete={register ? "new-password" : "current-password"}
+              required
+            />
+          </Field>
+          <Button disabled={busy || !supabase} type="submit">
+            {busy ? (
+              <Loader2 className="spin" />
+            ) : register ? (
+              t("register")
+            ) : (
+              t("signIn")
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setRegister(!register)}
+          >
+            {register ? t("signIn") : t("register")}
+          </Button>
+          {actionError && (
+            <p role="alert" className="error-text">
+              {actionError}
+            </p>
           )}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setRegister(!register)}
-        >
-          {register ? t("signIn") : t("register")}
-        </Button>
-        {actionError && (
-          <p role="alert" className="error-text">
-            {actionError}
-          </p>
-        )}
-      </form>
+        </form>
+      )}
     </Modal>
   );
   if (w.guestToken)
     return (
-      <>
+      <div
+        className="themed"
+        style={brandingStyle(brand)}
+        {...brandingAttributes(brand)}
+        data-theme={brand?.theme_mode ?? "light"}
+        data-style={brand?.interface_style ?? "classic"}
+      >
         <GuestView
           w={w}
           t={t}
@@ -329,22 +382,93 @@ export function Workspace() {
           openAuth={() => setAuth(true)}
         />
         {authModal}
-      </>
+      </div>
+    );
+  if (!w.authReady || (w.user && w.loading && !w.restaurant && !w.error))
+    return (
+      <div className="portal-loading" role="status">
+        <RoleAvatar role={currentPortal} size={90} />
+        <p>{t("loading")}</p>
+      </div>
+    );
+  if (!w.user || w.user.is_anonymous)
+    return (
+      <PortalLogin
+        portal={currentPortal}
+        brand={brand}
+        locale={locale}
+        setLocale={setLocale}
+      />
+    );
+  if (
+    (!w.role && currentPortal !== "admin") ||
+    (w.role && !canUsePortal(w.role, currentPortal))
+  )
+    return (
+      <main
+        className="portal-login themed"
+        data-theme={brand?.theme_mode || "light"}
+        style={brandingStyle(brand)}
+        {...brandingAttributes(brand)}
+      >
+        <section className="panel access-state">
+          <RoleAvatar role={currentPortal} size={100} />
+          <h1>
+            {locale === "de"
+              ? "Zugang zu Ihrem Team"
+              : tx("Join your team workspace")}
+          </h1>
+          <p>
+            {w.role
+              ? locale === "de"
+                ? "Dieses Konto hat eine andere Teamrolle."
+                : tx("This account belongs to a different staff workspace.")
+              : locale === "de"
+                ? "Ein Administrator muss Ihre E-Mail-Adresse dem Restaurant und Ihrer Rolle zuweisen."
+                : tx(
+                    "An administrator needs to assign your email to the restaurant and your staff role.",
+                  )}
+          </p>
+          <strong>{w.user.email}</strong>
+          {w.role && (
+            <Button asChild>
+              <a href={`/${portalForRole(w.role)}`}>
+                {portalTitle(portalForRole(w.role), locale === "de")}
+                <ArrowRight size={16} />
+              </a>
+            </Button>
+          )}
+          <Button onClick={() => void w.refresh()}>{t("retry")}</Button>
+          <SignOutButton
+            redirect={`/login/${currentPortal}`}
+            label={t("signOut")}
+          />
+          {w.error && <p role="alert">{w.error}</p>}
+        </section>
+      </main>
     );
   return (
     <div
-      className="app-shell"
-      style={
-        {
-          "--brand": w.restaurant?.brand_color || "#53634b",
-        } as React.CSSProperties
-      }
+      className="app-shell themed"
+      data-theme={brand?.theme_mode || "light"}
+      data-style={brand?.interface_style || "classic"}
+      style={brandingStyle(brand)}
+      {...brandingAttributes(brand)}
     >
       <aside className={`sidebar ${sidebar ? "sidebar-open" : ""}`}>
         <a className="wordmark" href="/">
-          mise<span>✳</span>
+          {brand?.logo_url ? (
+            <img src={brand.logo_url} alt={brand.name} />
+          ) : (
+            <>
+              {brand?.name || "mise"}
+              <span>✳</span>
+            </>
+          )}
         </a>
-        <p className="brand-caption">A BETTER SERVICE</p>
+        <p className="brand-caption">
+          {portalTitle(currentPortal, locale === "de").toUpperCase()}
+        </p>
         <div className="restaurant-switch">
           <span className="restaurant-symbol">
             {w.restaurant?.logo_url ? (
@@ -359,7 +483,7 @@ export function Workspace() {
           </div>
           {w.restaurants.length > 1 ? (
             <select
-              aria-label="Choose restaurant"
+              aria-label={tx("Choose restaurant")}
               value={w.restaurantId}
               onChange={(e) => w.setRestaurantId(e.target.value)}
             >
@@ -373,7 +497,7 @@ export function Workspace() {
             <ChevronDown size={15} />
           )}
         </div>
-        <nav aria-label="Main navigation">
+        <nav aria-label={tx("Main navigation")}>
           <p className="nav-label">{t("workspace")}</p>
           {(
             [
@@ -384,10 +508,8 @@ export function Workspace() {
           )
             .filter(
               (n) =>
-                !w.role ||
-                admin ||
-                n.id === "overview" ||
-                (w.role === "waiter" && n.id === "tables"),
+                currentPortal === "admin" ||
+                (currentPortal === "service" && n.id === "tables"),
             )
             .map((n) => (
               <button
@@ -409,10 +531,9 @@ export function Workspace() {
           )
             .filter(
               (n) =>
-                !w.role ||
-                admin ||
-                (w.role === "cook" && n.id === "kitchen") ||
-                (w.role === "waiter" && n.id === "service"),
+                currentPortal === "admin" ||
+                (currentPortal === "kitchen" && n.id === "kitchen") ||
+                (currentPortal === "service" && n.id === "service"),
             )
             .map((n) => (
               <button
@@ -427,7 +548,7 @@ export function Workspace() {
                 )}
               </button>
             ))}
-          {(!w.role || admin) && (
+          {currentPortal === "admin" && (
             <>
               <p className="nav-label">{t("restaurant")}</p>
               {(
@@ -449,48 +570,47 @@ export function Workspace() {
             </>
           )}
           {w.platformAdmin && (
-            <button
-              className={`nav-item ${page === "platform" ? "active" : ""}`}
-              onClick={() => navigate("platform")}
-            >
-              <ShieldCheck size={18} />
+            <a className="nav-item" href="/platform">
+              <ArrowRight size={18} />
               {t("platform")}
-            </button>
+            </a>
           )}
         </nav>
         <div className="sidebar-bottom">
           <div className="small-note">
             <Leaf size={21} />
             <p>
-              Less busywork.
+              {tx("Less busywork.")}
               <br />
-              <strong>More hospitality.</strong>
+              <strong>{tx("More hospitality.")}</strong>
             </p>
           </div>
-          <button
-            className="profile"
-            onClick={() =>
-              w.user
-                ? void run(async () => {
-                    await supabase?.auth.signOut();
-                  })
-                : setAuth(true)
-            }
-          >
-            <span className="avatar">
-              {w.user?.email?.slice(0, 2).toUpperCase() || "M"}
-            </span>
+          <div className="profile">
+            <RoleAvatar role={currentPortal} size={38} />
             <span>
-              <strong>{w.user?.email?.split("@")[0] || t("account")}</strong>
-              <small>{w.role || t("signIn")}</small>
+              <strong>{w.user?.email}</strong>
+              <small>
+                {tx(
+                  w.role === "owner"
+                    ? "Owner"
+                    : w.role === "admin"
+                      ? "Admin"
+                      : w.role === "cook"
+                        ? "Kitchen team"
+                        : "Floor service",
+                )}
+              </small>
             </span>
-            {w.user ? <LogOut size={16} /> : <ArrowRight size={16} />}
-          </button>
+          </div>
+          <SignOutButton
+            redirect={`/login/${currentPortal}`}
+            label={t("signOut")}
+          />
         </div>
       </aside>
       {sidebar && (
         <button
-          aria-label="Close navigation"
+          aria-label={tx("Close navigation")}
           className="sidebar-overlay"
           onClick={() => setSidebar(false)}
         />
@@ -503,7 +623,7 @@ export function Workspace() {
               variant="ghost"
               size="icon"
               onClick={() => setSidebar(!sidebar)}
-              aria-label="Open navigation"
+              aria-label={tx("Open navigation")}
             >
               <MenuIcon />
             </Button>
@@ -512,31 +632,31 @@ export function Workspace() {
             <strong>{t(safePage)}</strong>
           </div>
           <div className="topbar-actions">
+            <SignOutButton
+              redirect={`/login/${currentPortal}`}
+              label={t("signOut")}
+            />
             <span
               className={`connection ${w.live && w.online ? "connected" : ""}`}
             >
               <i />
               {!supabase
                 ? t("setup")
-                : !w.online
-                  ? t("offline")
-                  : w.live
-                    ? t("live")
-                    : t("connecting")}
+                : !w.user
+                  ? t("signIn")
+                  : !w.restaurantId
+                    ? t("setup")
+                    : !w.online
+                      ? t("offline")
+                      : w.live
+                        ? t("live")
+                        : t("connecting")}
             </span>
-            <select
-              className="language"
-              aria-label="Language"
-              value={locale}
-              onChange={(e) => setLocale(e.target.value as "en" | "de")}
-            >
-              <option value="en">EN</option>
-              <option value="de">DE</option>
-            </select>
+            <PreferenceControls />
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Guest requests"
+              aria-label={tx("Guest requests")}
               onClick={() => navigate("service")}
             >
               <Bell size={19} />
@@ -545,12 +665,28 @@ export function Workspace() {
           </div>
         </header>
         <main>
+          <motion.div
+            className="role-welcome"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <RoleAvatar role={currentPortal} size={64} />
+            <div>
+              <span className="eyebrow">{brand?.name || "Mise"}</span>
+              <strong>{portalTitle(currentPortal, locale === "de")}</strong>
+            </div>
+            <span className="role-welcome-note">
+              {locale === "de"
+                ? "Ein Team. Ein guter Service."
+                : tx("One team. A better service.")}
+            </span>
+          </motion.div>
           <div className="page-heading">
             <div>
               <div className="eyebrow">
                 {safePage === "overview"
-                  ? "THE ART OF A GOOD SERVICE"
-                  : "MADE FOR HOSPITALITY"}
+                  ? tx("THE ART OF A GOOD SERVICE")
+                  : tx("MADE FOR HOSPITALITY")}
               </div>
               <h1>{title}</h1>
               <p>{sub}</p>
@@ -581,7 +717,7 @@ export function Workspace() {
                 <Plus size={17} />
                 {t("addTable")}
               </Button>
-            ) : safePage === "team" && w.role === "owner" ? (
+            ) : safePage === "team" && admin ? (
               <Button onClick={() => setModal("staff")}>
                 <Plus size={17} />
                 {t("addStaff")}
@@ -600,7 +736,9 @@ export function Workspace() {
                     ? t("setupText")
                     : locale === "de"
                       ? "Melden Sie sich an, um Ihr Restaurant einzurichten."
-                      : "Sign in to set up your restaurant and welcome your first guests."}
+                      : tx(
+                          "Sign in to set up your restaurant and welcome your first guests.",
+                        )}
                 </p>
                 {!supabase && <small>{t("setupStep")}</small>}
               </div>
@@ -621,14 +759,28 @@ export function Workspace() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   const f = new FormData(e.currentTarget);
-                  void run(
-                    () =>
-                      rpc("create_restaurant", {
+                  void run(async () => {
+                    const slug = String(f.get("slug") ?? "")
+                      .trim()
+                      .toLowerCase();
+                    if (!isRestaurantSlug(slug)) throw new Error(t("slugHint"));
+                    try {
+                      await rpc("create_restaurant", {
                         p_name: f.get("name"),
-                        p_slug: f.get("slug"),
-                      }),
-                    t("success"),
-                  );
+                        p_slug: slug,
+                      });
+                    } catch (error) {
+                      if (
+                        error &&
+                        typeof error === "object" &&
+                        "code" in error &&
+                        error.code === "23505"
+                      ) {
+                        throw new Error(t("slugTaken"));
+                      }
+                      throw error;
+                    }
+                  }, t("success"));
                 }}
               >
                 <Field label={t("name")}>
@@ -638,9 +790,17 @@ export function Workspace() {
                   <input
                     name="slug"
                     required
-                    pattern="[a-z0-9][a-z0-9-]{2,60}"
-                    placeholder="your-restaurant"
+                    pattern={RESTAURANT_SLUG_PATTERN}
+                    minLength={3}
+                    maxLength={61}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    aria-describedby="restaurant-slug-hint"
+                    title={t("slugHint")}
+                    placeholder="greenbites"
                   />
+                  <small id="restaurant-slug-hint">{t("slugHint")}</small>
                 </Field>
                 <Button disabled={busy}>{t("createRestaurant")}</Button>
               </form>
@@ -749,19 +909,20 @@ export function Workspace() {
                         <div className="glass-line" />
                       </div>
                       <span className="eyebrow">
-                        A THOUGHTFUL LITTLE REMINDER
+                        {tx("A THOUGHTFUL LITTLE REMINDER")}
                       </span>
                       <h2>
-                        Great service starts
+                        {tx("Great service starts")}
                         <br />
-                        with a little space.
+                        {tx("with a little space.")}
                       </h2>
                       <p>
-                        Keep your menu fresh, your kitchen in sync, and your
-                        attention on your guests.
+                        {tx(
+                          "Keep your menu fresh, your kitchen in sync, and your attention on your guests.",
+                        )}
                       </p>
                       <button onClick={() => navigate("menu")}>
-                        Make room for a good service{" "}
+                        {tx("Make room for a good service")}{" "}
                         <ArrowDownRight size={19} />
                       </button>
                     </aside>
@@ -851,7 +1012,7 @@ export function Workspace() {
                               >
                                 {item.available
                                   ? t("available")
-                                  : "Unavailable"}
+                                  : tx("Unavailable")}
                               </span>
                             </div>
                             <div className="dish-body">
@@ -868,7 +1029,8 @@ export function Workspace() {
                               <p>{item.description || "—"}</p>
                               {item.allergens.length > 0 && (
                                 <small>
-                                  Allergens: {item.allergens.join(", ")}
+                                  {tx("Allergens:")}
+                                  {item.allergens.join(", ")}
                                 </small>
                               )}
                               {admin && (
@@ -920,12 +1082,14 @@ export function Workspace() {
                               active.filter((o) => o.table_name === table.name)
                                 .length
                             }{" "}
-                            active
+                            {tx("active")}
                           </span>
                         </div>
                         <h2>{table.name}</h2>
                         <p>
-                          {table.active ? "Open for guests" : "Ordering paused"}
+                          {table.active
+                            ? tx("Open for guests")
+                            : tx("Ordering paused")}
                         </p>
                         <Button
                           variant="outline"
@@ -1029,7 +1193,8 @@ export function Workspace() {
                           {"☆".repeat(5 - f.rating)}
                         </span>
                         <span className="label-pill">
-                          <Check size={12} /> Verified order
+                          <Check size={12} />
+                          {tx("Verified order")}
                         </span>
                         <p>{f.comment || "—"}</p>
                         <small>
@@ -1045,104 +1210,23 @@ export function Workspace() {
                   )}
                 </section>
               )}
-              {safePage === "team" && (
-                <section className="panel">
-                  <div className="section-heading">
-                    <h2>{t("team")}</h2>
-                    <span className="label-pill">
-                      {
-                        w.memberships.filter(
-                          (m) => m.restaurant_id === w.restaurantId,
-                        ).length
-                      }{" "}
-                      members
-                    </span>
-                  </div>
-                  {w.memberships
-                    .filter((m) => m.restaurant_id === w.restaurantId)
-                    .map((m) => (
-                      <div className="order-row" key={m.user_id}>
-                        <span className="avatar">
-                          {m.role.slice(0, 2).toUpperCase()}
-                        </span>
-                        <div>
-                          <strong>
-                            {m.user_id === w.user?.id
-                              ? w.user.email
-                              : m.user_id}
-                          </strong>
-                          <small>{m.role}</small>
-                        </div>
-                      </div>
-                    ))}
-                </section>
+              {safePage === "team" && w.restaurant && admin && (
+                <StaffDirectory
+                  restaurantId={w.restaurantId}
+                  slug={w.restaurant.slug}
+                  refreshKey={JSON.stringify(w.memberships)}
+                  locale={locale}
+                />
               )}
-              {safePage === "settings" && w.restaurant && (
-                <section className="panel settings-panel">
-                  <form
-                    key={w.restaurantId}
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const data = Object.fromEntries(
-                        new FormData(e.currentTarget),
-                      );
-                      void run(
-                        () =>
-                          rpc("save_restaurant", {
-                            p_restaurant: w.restaurantId,
-                            p_data: data,
-                          }),
-                        t("success"),
-                      );
-                    }}
-                  >
-                    <h2>Restaurant profile</h2>
-                    <Field label={t("name")}>
-                      <input
-                        name="name"
-                        required
-                        minLength={2}
-                        maxLength={100}
-                        defaultValue={w.restaurant.name}
-                      />
-                    </Field>
-                    <div className="form-grid">
-                      <Field label={t("brandColor")}>
-                        <input
-                          type="color"
-                          name="brand_color"
-                          defaultValue={w.restaurant.brand_color}
-                        />
-                      </Field>
-                      <Field label="Logo URL">
-                        <input
-                          name="logo_url"
-                          type="url"
-                          defaultValue={w.restaurant.logo_url || ""}
-                        />
-                      </Field>
-                    </div>
-                    <Field label={t("address")}>
-                      <input
-                        name="address"
-                        defaultValue={w.restaurant.address}
-                      />
-                    </Field>
-                    <Field label={t("contact")}>
-                      <input
-                        name="contact"
-                        defaultValue={w.restaurant.contact}
-                      />
-                    </Field>
-                    <Field label={t("hours")}>
-                      <textarea
-                        name="opening_hours"
-                        defaultValue={w.restaurant.opening_hours}
-                      />
-                    </Field>
-                    <Button disabled={busy || !admin}>{t("save")}</Button>
-                  </form>
-                </section>
+              {safePage === "settings" && w.restaurant && admin && (
+                <BrandingSettings
+                  key={w.restaurantId}
+                  restaurant={w.restaurant}
+                  run={run}
+                  busy={busy}
+                  t={t}
+                  locale={locale}
+                />
               )}
               {safePage === "platform" && w.platformAdmin && (
                 <section className="panel">
@@ -1166,8 +1250,9 @@ export function Workspace() {
                     >
                       <strong>{r.name}</strong>
                       <select name="plan" defaultValue={r.plan_id}>
-                        <option value="starter">Starter</option>
-                        <option value="growth">Growth</option>
+                        <option value="starter">{tx("Starter")}</option>
+                        <option value="growth">{tx("Growth")}</option>
+                        <option value="enterprise">{tx("Enterprise")}</option>
                       </select>
                       <label>
                         <input
@@ -1175,7 +1260,7 @@ export function Workspace() {
                           name="active"
                           defaultChecked={r.active}
                         />{" "}
-                        Active
+                        {tx("Active")}
                       </label>
                       <Button disabled={busy}>{t("save")}</Button>
                     </form>
@@ -1188,9 +1273,10 @@ export function Workspace() {
             <span>
               mise<span className="footer-star">✳</span>
             </span>
-            <p>Thoughtfully made for the people behind the plate.</p>
+            <p>{tx("Thoughtfully made for the people behind the plate.")}</p>
             <span className="footer-secure">
-              <ShieldCheck size={14} /> Your restaurant. Your space.
+              <ShieldCheck size={14} />
+              {tx("Your restaurant. Your space.")}
             </span>
           </footer>
         </main>
@@ -1225,9 +1311,15 @@ export function Workspace() {
                 </Field>
                 <Field label={t("role")}>
                   <select name="role">
-                    <option value="waiter">Waiter</option>
-                    <option value="cook">Cook</option>
-                    <option value="admin">Admin</option>
+                    <option value="waiter">
+                      {portalTitle("service", locale === "de")}
+                    </option>
+                    <option value="cook">
+                      {portalTitle("kitchen", locale === "de")}
+                    </option>
+                    {w.role === "owner" && (
+                      <option value="admin">{tx("Admin")}</option>
+                    )}
                   </select>
                 </Field>
               </>
@@ -1280,33 +1372,33 @@ export function Workspace() {
                     </select>
                   </Field>
                 </div>
-                <Field label="Ingredients (comma separated)">
+                <Field label={tx("Ingredients (comma separated)")}>
                   <input
                     name="ingredients"
                     defaultValue={editing?.ingredients.join(", ") || ""}
                   />
                 </Field>
-                <Field label="Allergens (comma separated)">
+                <Field label={tx("Allergens (comma separated)")}>
                   <input
                     name="allergens"
                     defaultValue={editing?.allergens.join(", ") || ""}
                   />
                 </Field>
-                <Field label="Image URL">
+                <Field label={tx("Image URL")}>
                   <input
                     name="image_url"
                     type="url"
                     defaultValue={editing?.image_url || ""}
                   />
                 </Field>
-                <Field label="Or upload an image (up to 10 MB)">
+                <Field label={tx("Or upload an image (up to 10 MB)")}>
                   <input
                     name="image"
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
                   />
                 </Field>
-                <Field label="Video URL">
+                <Field label={tx("Video URL")}>
                   <input
                     name="video_url"
                     type="url"

@@ -1,4 +1,7 @@
 "use client";
+import { translateText as tx } from "@/lib/translation";
+
+import { PreferenceControls, usePreferences } from "./preferences";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ArrowRight,
@@ -11,6 +14,9 @@ import {
   ShoppingBag,
   Utensils,
 } from "lucide-react";
+import { motion } from "framer-motion";
+import { brandingAttributes, brandingStyle } from "@/lib/branding";
+import { RoleAvatar } from "./role-avatar";
 import { Button } from "./ui/button";
 import { Empty, Field, Modal, type T } from "./shared";
 import { Ticket } from "./ticket";
@@ -32,14 +38,16 @@ export function GuestView({
 }: {
   w: WorkspaceData;
   t: T;
-  locale: "en" | "de";
-  setLocale: (l: "en" | "de") => void;
+  locale: "en" | "de" | "tr";
+  setLocale: (l: "en" | "de" | "tr") => void;
   run: (fn: () => Promise<unknown>, message?: string) => Promise<boolean>;
   busy: boolean;
   error: string;
   notice: string;
   openAuth: () => void;
 }) {
+  usePreferences();
+
   const [cart, setCart] = useState<CartItem[]>([]),
     [pending, setPending] = useState<Pending | null>(null),
     [loaded, setLoaded] = useState(""),
@@ -48,6 +56,7 @@ export function GuestView({
     [ratingOrder, setRatingOrder] = useState<Order | null>(null),
     [tab, setTab] = useState<"menu" | "orders">("menu");
   const sending = useRef(false);
+  const brand = w.restaurant ?? w.previewBrand;
   useEffect(() => {
     if (!w.sessionId) return;
     try {
@@ -125,41 +134,51 @@ export function GuestView({
   );
   return (
     <div
-      className="guest-shell"
-      style={
-        {
-          "--brand": w.restaurant?.brand_color || "#53634b",
-        } as React.CSSProperties
-      }
+      className="guest-shell themed"
+      data-theme={brand?.theme_mode || "light"}
+      data-style={brand?.interface_style || "classic"}
+      data-menu-layout={brand?.menu_layout || "grid"}
+      style={brandingStyle(brand)}
+      {...brandingAttributes(brand)}
     >
       <header className="guest-header">
         <a className="wordmark" href="/">
-          mise<span>✳</span>
+          {brand?.logo_url ? (
+            <img src={brand.logo_url} alt={brand.name} />
+          ) : (
+            <>
+              {brand?.name || "mise"}
+              <span>✳</span>
+            </>
+          )}
         </a>
-        <span>{w.restaurant?.name || t("welcome")}</span>
+        <span>{brand?.name || t("welcome")}</span>
         <div>
-          <select
-            aria-label="Language"
-            className="language"
-            value={locale}
-            onChange={(e) => setLocale(e.target.value as "en" | "de")}
-          >
-            <option value="en">EN</option>
-            <option value="de">DE</option>
-          </select>
+          <PreferenceControls />
           <Button variant="ghost" onClick={openAuth}>
             {t("account")}
           </Button>
         </div>
       </header>
       <main className="guest-main">
+        {brand?.cover_url && (
+          <img className="guest-cover" src={brand.cover_url} alt="" />
+        )}
         <div className="guest-hero">
-          <div className="eyebrow">GOOD FOOD. GOOD COMPANY.</div>
-          <h1>{w.restaurant?.name || t("welcome")}</h1>
-          <p>{t("guestSub")}</p>
-          {w.restaurant?.opening_hours && (
-            <small>{w.restaurant.opening_hours}</small>
+          <RoleAvatar role="guest" size={82} />
+          <div className="eyebrow">{tx("GOOD FOOD. GOOD COMPANY.")}</div>
+          <h1>{brand?.welcome_title || brand?.name || t("welcome")}</h1>
+          <p>{brand?.welcome_message || t("guestSub")}</p>
+          {brand?.address && <p className="guest-contact">{brand.address}</p>}
+          {brand?.phone && (
+            <a
+              className="guest-contact"
+              href={`tel:${brand.phone.replace(/[^+0-9]/g, "")}`}
+            >
+              {brand.phone}
+            </a>
           )}
+          {brand?.opening_hours && <small>{brand.opening_hours}</small>}
         </div>
         {!w.user && (
           <section className="panel">
@@ -220,7 +239,7 @@ export function GuestView({
                         p_message:
                           locale === "de"
                             ? "Bitte kommen Sie zum Tisch."
-                            : "Please visit the table.",
+                            : tx("Please visit the table."),
                       }),
                     t("success"),
                   )
@@ -258,7 +277,13 @@ export function GuestView({
                           (category === "all" || i.category_id === category),
                       )
                       .map((item) => (
-                        <article className="menu-card" key={item.id}>
+                        <motion.article
+                          className="menu-card"
+                          key={item.id}
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          whileHover={{ y: -3 }}
+                        >
                           <div className="dish-image">
                             {item.image_url ? (
                               <img alt={item.name} src={item.image_url} />
@@ -284,7 +309,10 @@ export function GuestView({
                             {item.allergens.length > 0 && (
                               <small>
                                 <strong>
-                                  {locale === "de" ? "Allergene" : "Allergens"}:
+                                  {locale === "de"
+                                    ? "Allergene"
+                                    : tx("Allergens")}
+                                  :
                                 </strong>{" "}
                                 {item.allergens.join(", ")}
                               </small>
@@ -306,7 +334,7 @@ export function GuestView({
                               {t("addToOrder")}
                             </Button>
                           </div>
-                        </article>
+                        </motion.article>
                       ))}
                   </div>
                   {!w.menu.some((i) => i.available) && (
@@ -330,7 +358,7 @@ export function GuestView({
                             <Button
                               variant="ghost"
                               size="icon"
-                              aria-label={`Decrease ${dish?.name}`}
+                              aria-label={`${tx("Decrease")}: ${dish?.name}`}
                               disabled={!!pending}
                               onClick={() =>
                                 setCart((c) =>
@@ -350,7 +378,7 @@ export function GuestView({
                             <Button
                               variant="ghost"
                               size="icon"
-                              aria-label={`Increase ${dish?.name}`}
+                              aria-label={`${tx("Increase")}: ${dish?.name}`}
                               disabled={!!pending || item.quantity >= 20}
                               onClick={() => add(item.menu_item_id)}
                             >
@@ -403,7 +431,9 @@ export function GuestView({
                     <p role="status" className="pending-note">
                       {locale === "de"
                         ? "Bestätigung ausstehend. Erneut versuchen sendet dieselbe Bestellung."
-                        : "Confirmation pending. Retry safely resends the same ticket."}
+                        : tx(
+                            "Confirmation pending. Retry safely resends the same ticket.",
+                          )}
                     </p>
                   )}
                   <p className="cart-note">{t("ticketNote")}</p>
@@ -552,7 +582,7 @@ export function GuestView({
                 setRatingOrder(null);
             }}
           >
-            <Field label="Rating">
+            <Field label={tx("Rating")}>
               <select name="rating">
                 {[5, 4, 3, 2, 1].map((n) => (
                   <option value={n} key={n}>

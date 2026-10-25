@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "./ui/button";
@@ -25,7 +26,12 @@ export function Ticket({
     ["placed", "preparing"].includes(o.status) &&
     Date.now() - Date.parse(o.created_at) > 15 * 60000;
   return (
-    <article className={`ticket panel ticket-${o.status}`}>
+    <motion.article
+      layout="position"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`ticket panel ticket-${o.status}`}
+    >
       <div className="section-heading">
         <div>
           <span className="ticket-id">#{o.id.slice(0, 6)}</span>
@@ -65,6 +71,6 @@ export function Ticket({
         </Button>
       )}
       {children}
-    </article>
+    </motion.article>
   );
 }

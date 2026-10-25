@@ -37,7 +37,7 @@ Enable **Anonymous Sign-ins** and **Email** under Supabase Auth. Configure your 
 2. Create a restaurant with a unique lowercase URL name.
 3. Add categories and menu items. Prices are entered in the restaurant currency and stored as integer minor units.
 4. Create a table. Copy its guest link and open it in a separate browser profile or device. The link is a bearer capability; treat it like the physical table QR. QR artwork generation is not included yet.
-5. Employees register their accounts first. The owner assigns a role by their registered email under **Team**. This MVP does not send invitation emails.
+5. Employees register their accounts first. The owner or administrator assigns a kitchen or floor-service role by their registered email under **Team**; only owners can grant or change administrator roles. This MVP does not send invitation emails.
 6. The guest selects **Explore the menu**, which starts an anonymous Supabase Auth session without registration. Add dishes, quantities and instructions, then send the ticket.
 7. A cook starts preparation and marks the ticket ready. A waiter marks it served. Guests see the changes and can leave one verified-order review.
 8. Add another dish while the first ticket is preparing: it creates a separate ticket. Guest changes and cancellations are allowed only while their ticket is placed.
@@ -70,8 +70,30 @@ See [validation notes](docs/VALIDATION.md) for results and remaining checks.
 
 Import this repository into Vercel as a Next.js project. Use `npm ci`, `npm run build`, and the default Next.js output settings. Set both public Supabase environment variables for the intended environment, then deploy. Apply migrations to Supabase before serving the app, and set the production Auth URL. The repository does not deploy a Supabase project, send email, or implement payments automatically.
 
-No Vercel deployment has been made. Supabase credentials will be supplied later.
+Production is deployed at **https://mise-restaurants.vercel.app** and connected to the dedicated **Restaurants** Supabase project (`pjvgwmgpklsupkxhiysu`, Frankfurt). The Auth site URL is configured for this domain. Email confirmations and TOTP MFA remain enabled. Local credentials are in the ignored `.env.local`; only the two public Supabase variables are uploaded to Vercel. The database password is excluded from deployment.
+
+Hosted verification can be rerun with `node scripts/verify-supabase.mjs pjvgwmgpklsupkxhiysu` by an authenticated project administrator. It creates temporary fixtures, exercises real Auth/RPC/Realtime/Storage APIs and concurrent submissions, then removes its fixtures. It does not send signup emails.
 
 ## Architecture and implementation scope
 
 See [architecture](docs/ARCHITECTURE.md) for the database model and trust boundaries, and [remaining work](docs/ROADMAP.md) for the parts of the full brief beyond this MVP. This is a verified local implementation foundation, not a claim that the full SaaS is production-ready.
+
+## Staff portals and restaurant branding
+
+Use `/login/admin`, `/login/kitchen`, and `/login/service` for the separate portals. **Team** supplies restaurant-specific links that include `?restaurant=YOUR_SLUG`. Staff register and confirm their email, then an administrator assigns their registered email a role. Selecting a portal does not grant its permissions.
+
+Administrators manage menu items, tables, staff and **Settings**. Kitchen staff prepare tickets; floor-service staff handle serving and guest support. In **Settings**, upload a logo and configure the restaurant name, address, phone, colors, fonts, interface style, light/dark/device theme and grid/list guest menu. A live preview shows unsaved choices; saving applies the branding across the restaurant interfaces. Role avatars and motion support reduced-motion preferences.
+
+## Public landing page and expanded customization
+
+The root page introduces the product, services, role portals, interactive brand examples, and monthly per-restaurant packages: Starter €50, Growth €100, and Enterprise €199. Starter allows 15 tables / 10 staff / 100 menu items, Growth 60 / 40 / 500, and Enterprise 200 / 100 / 2,000. New restaurants use Starter capacity; platform administrators can change the plan. This is published pricing, not automated subscription billing or checkout.
+
+Existing root `?table=` guest links and `?restaurant=` branded links continue to open the workspace. Staff can enter directly at `/admin`, `/kitchen`, or `/service`.
+
+Settings now also includes style presets, independent heading fonts, compact/comfortable spacing, avatar visibility, guest welcome text, and a cover image URL/upload. Empty welcome fields use the default copy. Appearance settings are restricted to owners/admins and returned through the sanitized public profile for guest and login screens. Migration `202610240001_customization.sql` preserves existing heading typography.
+
+## App administration and sign-out
+
+`/platform` (also `/login/platform`) is a separate app-admin console with its own sign-in screen. Existing `platform_admins` membership is required and checked by Supabase; restaurant owners cannot self-promote. The console supports restaurant name/slug search, active/suspended filters, package changes, pause/reactivate controls, package capacity reference and recent audit activity. Suspension pauses new guest sessions/orders; staff can finish existing tickets. Account grants must be performed by an authorized backend operator after the intended email is identified.
+
+Explicit Sign out buttons are present in workspace headers, sidebars, signed-in guest account dialogs, the landing page and app-admin console. Sign-out uses the current-browser scope, checks the Auth result, and navigates to a fresh page without refreshing the old user's workspace. Other devices remain signed in. Errors are shown rather than silently ignored.
