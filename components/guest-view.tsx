@@ -1,4 +1,5 @@
 "use client";
+import {ToastBridge,useNotifications} from "./notifications";
 import { translateText as tx } from "@/lib/translation";
 
 import { PreferenceControls, usePreferences } from "./preferences";
@@ -47,6 +48,7 @@ export function GuestView({
   openAuth: () => void;
 }) {
   usePreferences();
+  const {notify}=useNotifications();
 
   const [cart, setCart] = useState<CartItem[]>([]),
     [pending, setPending] = useState<Pending | null>(null),
@@ -89,7 +91,7 @@ export function GuestView({
   }, [cart, pending, w.sessionId, loaded]);
   const add = (id: string) => {
     if (pending) return;
-    setCartNotice(tx("Added to your order"));
+    notify(tx("Added to your order"));
     setCart((c) => {
       const found = c.find((i) => i.menu_item_id === id);
       return found
@@ -133,7 +135,7 @@ export function GuestView({
       setCart([]);
       setPending(null);
       setTab("orders");
-      setCartNotice(tx("Order sent to the kitchen"));
+      notify(tx("Order sent to the kitchen"));
     }
     sending.current = false;
   };
@@ -455,7 +457,7 @@ export function GuestView({
                                   (i) => i.menu_item_id !== item.menu_item_id,
                                 ),
                               );
-                              setCartNotice(tx("Item removed"));
+                              notify(tx("Item removed"));
                             }}
                           >
                             {tx("Remove")}
@@ -563,12 +565,7 @@ export function GuestView({
           {tx("Drop here to add to your order")}
         </div>
       )}
-      {(notice || cartNotice) && (
-        <div className="toast" role="status">
-          <Check size={18} />
-          {cartNotice || notice}
-        </div>
-      )}
+      <ToastBridge message={notice}/><ToastBridge message={error||w.error} kind="error"/>
       {edit && (
         <Modal title={`${t("edit")}: ${edit.name}`} close={() => setEdit(null)}>
           <form

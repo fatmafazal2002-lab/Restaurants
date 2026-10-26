@@ -80,6 +80,7 @@ export function PortalLogin({
           )}
         </a>
         <span>{brand?.name || tx("A better service, together.")}</span>
+        <a className="portal-separation-link" href="/login/platform">{tx("App administrator login")}</a>
         <PreferenceControls />
       </header>
       <div className="portal-login-grid">

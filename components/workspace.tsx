@@ -48,6 +48,9 @@ import {
 import { PortalLogin } from "./portal-login";
 import { RoleAvatar } from "./role-avatar";
 import { RestaurantOnboarding } from "./restaurant-onboarding";
+import { ToastBridge, useNotifications } from "./notifications";
+import { ServiceProgress } from "./service-progress";
+import { EmployeeSetup } from "./employee-setup";
 import { ArchivedMenu } from "./archived-menu";
 import { ProfileMenu } from "./profile-menu";
 import { SignOutButton } from "./sign-out-button";
@@ -102,15 +105,17 @@ export function Workspace({
     const timer = setTimeout(() => setNotice(""), 5000);
     return () => clearTimeout(timer);
   }, [notice]);
+  const { notify } = useNotifications();
   const run = async (fn: () => Promise<unknown>, message?: string) => {
     if (busy) return false;
     setBusy(true);
     setActionError("");
+    setNotice("");
     try {
       if (!w.online) throw new Error(t("offline"));
       await fn();
       await w.refresh();
-      if (message) setNotice(message);
+      setNotice(message || t("success"));
       return true;
     } catch (e) {
       setActionError(errorMessage(e));
@@ -166,6 +171,7 @@ export function Workspace({
     );
   }, [currentPortal]);
   const navigate = (next: Page) => {
+    notify(t(next), "info");
     setPage(next);
     setSidebar(false);
     setFilter("all");
@@ -277,6 +283,10 @@ export function Workspace({
   const active = w.orders.filter(
     (o) => !["served", "cancelled"].includes(o.status),
   );
+  const queueOrders =
+    filter === "served"
+      ? w.orders.filter((o) => o.status === "served")
+      : active;
   const stats = [
     {
       label: t("activeOrders"),
@@ -404,6 +414,7 @@ export function Workspace({
       )}
     </Modal>
   );
+  if (w.employeeSetup) return <EmployeeSetup profile={w.employeeSetup} />;
   if (w.guestToken)
     return (
       <div
@@ -973,6 +984,30 @@ export function Workspace({
                   </div>
                 </>
               )}
+              {["overview", "kitchen", "service"].includes(safePage) && (
+                <ServiceProgress
+                  orders={w.orders}
+                  chart={safePage === "overview"}
+                  onStage={(status) => {
+                    if (admin) {
+                      setPage("kitchen");
+                      setFilter(status);
+                    } else setFilter(status);
+                    notify(
+                      tx(
+                        status === "placed"
+                          ? "Placed"
+                          : status === "preparing"
+                            ? "Preparing"
+                            : status === "ready"
+                              ? "Ready"
+                              : "Served",
+                      ),
+                      "info",
+                    );
+                  }}
+                />
+              )}
               {safePage === "menu" && admin && (
                 <ArchivedMenu
                   restaurantId={w.restaurantId}
@@ -1169,20 +1204,22 @@ export function Workspace({
               {(safePage === "kitchen" || safePage === "service") && (
                 <>
                   <div className="tabs queue-tabs">
-                    {["all", "placed", "preparing", "ready"].map((s) => (
-                      <button
-                        className={filter === s ? "selected" : ""}
-                        key={s}
-                        onClick={() => setFilter(s)}
-                      >
-                        {t(s as TranslationKey)}
-                        <span>
-                          {s === "all"
-                            ? active.length
-                            : active.filter((o) => o.status === s).length}
-                        </span>
-                      </button>
-                    ))}
+                    {["all", "placed", "preparing", "ready", "served"].map(
+                      (s) => (
+                        <button
+                          className={filter === s ? "selected" : ""}
+                          key={s}
+                          onClick={() => setFilter(s)}
+                        >
+                          {t(s as TranslationKey)}
+                          <span>
+                            {s === "all"
+                              ? active.length
+                              : w.orders.filter((o) => o.status === s).length}
+                          </span>
+                        </button>
+                      ),
+                    )}
                   </div>
                   {safePage === "service" && w.requests.length > 0 && (
                     <section className="panel request-panel">
@@ -1207,7 +1244,7 @@ export function Workspace({
                     </section>
                   )}
                   <div className="ticket-grid">
-                    {active
+                    {queueOrders
                       .filter((o) => filter === "all" || o.status === filter)
                       .map((o) => (
                         <Ticket
@@ -1222,7 +1259,7 @@ export function Workspace({
                           busy={busy}
                         />
                       ))}
-                    {active.filter(
+                    {queueOrders.filter(
                       (o) => filter === "all" || o.status === filter,
                     ).length === 0 && (
                       <section className="panel full-width">
@@ -1335,12 +1372,8 @@ export function Workspace({
           </footer>
         </main>
       </div>
-      {notice && (
-        <div className="toast" role="status">
-          <Check size={18} />
-          {notice}
-        </div>
-      )}
+      <ToastBridge message={notice} />
+      <ToastBridge message={actionError || w.error} kind="error" />
       {authModal}
       {modal && (
         <Modal

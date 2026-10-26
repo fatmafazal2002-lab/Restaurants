@@ -1,0 +1,5 @@
+import {readFileSync} from 'node:fs';
+import pg from 'pg';
+process.loadEnvFile('.env.local');const url=new URL(readFileSync('supabase/.temp/pooler-url','utf8').trim());url.password=process.env.SUPABASE_DB_PASSWORD;
+const client=new pg.Client({connectionString:url.toString(),ssl:{rejectUnauthorized:true,ca:readFileSync('supabase/.temp/pgdelta/pgdelta-target-ca.crt','utf8')}});await client.connect();
+try{const {rows}=await client.query(`select r.slug,count(m.*)::int members,count(m.*) filter(where m.role='owner')::int owners from public.restaurants r left join public.memberships m on m.restaurant_id=r.id group by r.id order by r.created_at`);console.log(JSON.stringify(rows));const shared=await client.query(`select count(*)::int accounts_in_multiple_restaurants from (select user_id from public.memberships group by user_id having count(*)>1) x`);console.log(shared.rows);console.log((await client.query('select count(*)::int platform_admins from public.platform_admins')).rows)}finally{await client.end()}

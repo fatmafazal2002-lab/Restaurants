@@ -1,4 +1,5 @@
 "use client";
+import { ToastBridge } from "./notifications";
 import { translateText as tx } from "@/lib/translation";
 
 import { PreferenceControls, usePreferences } from "./preferences";
@@ -11,7 +12,7 @@ import {
 } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Building2, ShieldCheck, Search, RefreshCw } from "lucide-react";
-import { supabase, rpc } from "@/lib/supabase";
+import { supabase, rpc } from "@/lib/platform-supabase";
 import type { Restaurant } from "@/lib/types";
 import { errorMessage } from "@/lib/utils";
 import { PlatformInsights } from "./platform-insights";
@@ -137,7 +138,7 @@ export function PlatformConsole() {
           {user && (
             <>
               <span className="platform-email">{user.email}</span>
-              <SignOutButton redirect="/platform" />
+              <SignOutButton client={supabase} redirect="/platform" />
             </>
           )}
         </div>
@@ -247,6 +248,8 @@ export function PlatformConsole() {
               {error}
             </p>
           )}
+          <ToastBridge message={notice} />
+          <ToastBridge message={error} kind="error" />
           {notice && (
             <p className="platform-notice" role="status">
               {notice}

@@ -107,3 +107,4 @@ export function canTransition(
         ["owner", "admin", "waiter"].includes(role))
   );
 }
+export type EmployeeSetupData={id:string;restaurant_id:string;restaurant_name:string;slug:string;name:string;email:string;phone:string;employee_id:string;role:'cook'|'waiter';photo_path:string|null};

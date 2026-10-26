@@ -18,14 +18,21 @@ export function SessionAccess() {
     );
     return () => subscription.unsubscribe();
   }, []);
-  return signedIn ? (
-    <div className="landing-session">
-      <a href="/admin">{tx("My workspace")}</a>
-      <SignOutButton redirect="/" />
+  return (
+    <div className="login-entrances">
+      <a className="platform-login-link" href="/login/platform">
+        {tx("App administrator login")}
+      </a>
+      {signedIn ? (
+        <div className="landing-session">
+          <a href="/admin">{tx("Restaurant workspace")}</a>
+          <SignOutButton redirect="/" />
+        </div>
+      ) : (
+        <a className="marketing-login" href="/login/admin">
+          {tx("Restaurant administrator login")}
+        </a>
+      )}
     </div>
-  ) : (
-    <a className="marketing-login" href="/login/admin">
-      {tx("Log in ↗")}
-    </a>
   );
 }

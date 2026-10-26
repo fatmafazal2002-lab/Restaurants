@@ -1,0 +1,7 @@
+// Keep the service credential on the server. Never print it or put it in NEXT_PUBLIC_*.
+import {readFileSync,writeFileSync,chmodSync} from 'node:fs';import {execFileSync} from 'node:child_process';
+process.loadEnvFile('.env.local');const ref='pjvgwmgpklsupkxhiysu';const project=JSON.parse(readFileSync('.vercel/project.json','utf8'));
+if(process.env.NEXT_PUBLIC_SUPABASE_URL!==`https://${ref}.supabase.co`||project.projectName!=='mise-restaurants')throw new Error('Project mismatch');
+const result=JSON.parse(execFileSync('supabase',['projects','api-keys','--project-ref',ref,'-o','json'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));const key=(Array.isArray(result)?result:result.api_keys??result.keys).find(k=>k.name==='service_role')?.api_key;if(!key)throw new Error('Server credential unavailable');
+const env=readFileSync('.env.local','utf8').split('\n').filter(l=>!l.startsWith('SUPABASE_SERVICE_ROLE_KEY='));env.push(`SUPABASE_SERVICE_ROLE_KEY=${key}`);writeFileSync('.env.local',env.join('\n')+'\n',{mode:0o600});chmodSync('.env.local',0o600);
+try{execFileSync('npx',['--yes','vercel@latest','env','add','SUPABASE_SERVICE_ROLE_KEY','--environment','production','--sensitive','--force','--yes','--scope','fatmafazal2002-lab'],{input:key,encoding:'utf8',stdio:['pipe','pipe','pipe']});console.log('Server-only employee credential configured locally and in Vercel production.')}catch(e){console.error(String(e.stderr||e.message).replaceAll(key,'[redacted]'));process.exitCode=1}

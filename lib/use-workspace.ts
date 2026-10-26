@@ -6,6 +6,7 @@ import type { Branding } from "./branding";
 import { rpc, supabase } from "./supabase";
 import { errorMessage } from "./utils";
 import type {
+  EmployeeSetupData,
   Category,
   DiningTable,
   Feedback,
@@ -16,6 +17,9 @@ import type {
   ServiceRequest,
 } from "./types";
 export function useWorkspace(portal?: Portal, tenantSlug?: string) {
+  const [employeeSetup, setEmployeeSetup] = useState<EmployeeSetupData | null>(
+    null,
+  );
   const [previewBrand, setPreviewBrand] = useState<Branding | null>(null);
   const [user, setUser] = useState<User | null>(null),
     [authReady, setAuthReady] = useState(!supabase);
@@ -68,6 +72,7 @@ export function useWorkspace(portal?: Portal, tenantSlug?: string) {
       if (identity.current !== next) {
         generation.current++;
         identity.current = next;
+        setEmployeeSetup(null);
         setRestaurants([]);
         setRestaurantId("");
         setMemberships([]);
@@ -120,7 +125,20 @@ export function useWorkspace(portal?: Portal, tenantSlug?: string) {
         if (error) throw error;
         return data as T;
       };
-      if (!user.is_anonymous) await rpc("claim_employee_access", {});
+      if (!user.is_anonymous) {
+        const setup = await rpc<EmployeeSetupData | null>("employee_setup", {});
+        if (gen !== generation.current) return;
+        setEmployeeSetup(setup);
+        if (setup) {
+          setRestaurants([]);
+          setRestaurantId("");
+          setMemberships([]);
+          setMenu([]);
+          setOrders([]);
+          return;
+        }
+        await rpc("claim_employee_access", {});
+      }
       let rid = restaurantId;
       let sid = "";
       if (guestToken) {
@@ -134,7 +152,7 @@ export function useWorkspace(portal?: Portal, tenantSlug?: string) {
         );
         rid = s.restaurant_id;
       }
-      const [rs, ms, pa] = await Promise.all([
+      const [allRestaurants, ms, pa] = await Promise.all([
         checked<Restaurant[]>(
           supabase.from("restaurants").select("*").order("created_at"),
         ),
@@ -144,6 +162,11 @@ export function useWorkspace(portal?: Portal, tenantSlug?: string) {
         ),
       ]);
       if (gen !== generation.current) return;
+      const rs = guestToken
+        ? allRestaurants
+        : allRestaurants.filter((r) =>
+            ms.some((m) => m.restaurant_id === r.id && m.user_id === user.id),
+          );
       if (tenantSlug && !guestToken) {
         const tenant = rs.find((r) => r.slug === tenantSlug);
         if (!tenant)
@@ -312,6 +335,7 @@ export function useWorkspace(portal?: Portal, tenantSlug?: string) {
     };
   }, [restaurantId, user, refresh]);
   return {
+    employeeSetup,
     user,
     previewBrand,
     authReady,

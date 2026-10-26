@@ -2,6 +2,7 @@
 import { translateText as tx } from "@/lib/translation";
 import { usePreferences } from "./preferences";
 
+import type {SupabaseClient} from "@supabase/supabase-js";
 import { useState } from "react";
 import { LogOut, Loader2 } from "lucide-react";
 import { signOutCurrentBrowser } from "@/lib/sign-out";
@@ -10,7 +11,9 @@ import { Button } from "./ui/button";
 export function SignOutButton({
   redirect = "/login/admin",
   label = tx("Sign out"),
+  client,
 }: {
+  client?:SupabaseClient|null;
   redirect?: string;
   label?: string;
 }) {
@@ -28,7 +31,7 @@ export function SignOutButton({
           setBusy(true);
           setError("");
           try {
-            await signOutCurrentBrowser();
+            await signOutCurrentBrowser(client);
             window.location.replace(redirect);
           } catch (e) {
             setError(errorMessage(e));

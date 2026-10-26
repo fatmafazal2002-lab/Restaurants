@@ -1,4 +1,6 @@
 "use client";
+import { employeeApi } from "@/lib/employee-api";
+import { ToastBridge } from "./notifications";
 import { useEffect, useState } from "react";
 import { translateText as tx } from "@/lib/translation";
 import { usePreferences } from "./preferences";
@@ -33,6 +35,13 @@ export function EmployeeManager({
   onChanged: () => void;
 }) {
   const { locale } = usePreferences();
+  const [provision, setProvision] = useState(false),
+    [credentials, setCredentials] = useState<{
+      email: string;
+      password?: string;
+      existing: boolean;
+      role: string;
+    } | null>(null);
   const [rows, setRows] = useState<Employee[]>([]),
     [editing, setEditing] = useState<Partial<Employee> | null>(null),
     [deleting, setDeleting] = useState<Employee | null>(null),
@@ -75,20 +84,14 @@ export function EmployeeManager({
             <h2>{tx("Employee profiles")}</h2>
             <p>
               {tx(
-                "Add employees now. They gain access after registering and confirming the matching email address.",
+                "Create a cook or floor-service account. New employees receive a temporary password and complete their own profile.",
               )}
             </p>
           </div>
           <Button
             onClick={() => {
               setError("");
-              setEditing({
-                name: "",
-                email: "",
-                phone: "",
-                employee_id: "",
-                role: "cook",
-              });
+              setProvision(true);
             }}
           >
             {tx("Add employee")}
@@ -176,6 +179,119 @@ export function EmployeeManager({
         refreshKey={String(revision)}
         locale={locale}
       />
+      <ToastBridge message={notice} />
+      <ToastBridge message={error} kind="error" />
+      {provision && (
+        <Modal
+          title={tx("Create employee login")}
+          close={() => {
+            if (!busy) setProvision(false);
+          }}
+        >
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setBusy(true);
+              setError("");
+              setNotice("");
+              const f = new FormData(e.currentTarget);
+              try {
+                const result = await employeeApi<{
+                  email: string;
+                  password?: string;
+                  existing: boolean;
+                }>("provision", {
+                  restaurant_id: restaurantId,
+                  email: f.get("email"),
+                  role: f.get("role"),
+                  employee_id: f.get("employee_id"),
+                });
+                setCredentials({ ...result, role: String(f.get("role")) });
+                setProvision(false);
+                setRevision((n) => n + 1);
+                onChanged();
+                setNotice(tx("Employee login is ready."));
+              } catch (e) {
+                setError(errorMessage(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <Field label={tx("Email")}>
+              <input name="email" type="email" required maxLength={254} />
+            </Field>
+            <Field label={tx("Role")}>
+              <select name="role">
+                <option value="cook">{tx("Kitchen team")}</option>
+                <option value="waiter">{tx("Floor service")}</option>
+              </select>
+            </Field>
+            <Field label={tx("Employee ID (optional)")}>
+              <input name="employee_id" maxLength={40} />
+            </Field>
+            <p>
+              {tx(
+                "The employee will enter their name, phone and photo after their first sign-in.",
+              )}
+            </p>
+            {error && (
+              <p role="alert" className="error-text">
+                {error}
+              </p>
+            )}
+            <Button disabled={busy}>
+              {tx(busy ? "Saving…" : "Create employee login")}
+            </Button>
+          </form>
+        </Modal>
+      )}
+      {credentials && (
+        <Modal
+          title={tx("Employee sign-in details")}
+          close={() => setCredentials(null)}
+        >
+          <p>{credentials.email}</p>
+          {credentials.existing ? (
+            <p>
+              {tx(
+                "This employee already has an account. Their current password stays unchanged.",
+              )}
+            </p>
+          ) : (
+            <>
+              <p>
+                {tx(
+                  "Share these details privately with the employee. This temporary password is shown only now.",
+                )}
+              </p>
+              <Field label={tx("Temporary password")}>
+                <input readOnly value={credentials.password} />
+              </Field>
+            </>
+          )}
+          <Field label={tx("Login link")}>
+            <input
+              readOnly
+              value={`${location.origin}/r/${encodeURIComponent(slug)}/${credentials.role === "cook" ? "kitchen" : "service"}`}
+            />
+          </Field>
+          <Button
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(
+                  `${credentials.email}\n${credentials.password || tx("Use your existing password")}\n${location.origin}/r/${slug}/${credentials.role === "cook" ? "kitchen" : "service"}`,
+                );
+                setNotice(tx("Copied to clipboard"));
+              } catch (e) {
+                setError(errorMessage(e));
+              }
+            }}
+          >
+            {tx("Copy sign-in details")}
+          </Button>
+        </Modal>
+      )}
       {editing && (
         <Modal
           title={tx(editing.id ? "Edit employee" : "Add employee")}

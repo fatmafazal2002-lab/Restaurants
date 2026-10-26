@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { PreferencesProvider } from "@/components/preferences";
+import { NotificationsProvider } from "@/components/notifications";
 import { MotionProvider } from "@/components/motion-provider";
 export const metadata: Metadata = {
   title: "Mise · A better service",
@@ -14,7 +15,9 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <PreferencesProvider>
-          <MotionProvider>{children}</MotionProvider>
+          <MotionProvider>
+            <NotificationsProvider>{children}</NotificationsProvider>
+          </MotionProvider>
         </PreferencesProvider>
       </body>
     </html>

@@ -1,8 +1,9 @@
 "use client";
+import { ActivityChart, StatusDonut } from "./activity-chart";
 import { translateText as tx } from "@/lib/translation";
 
 import { useEffect, useState } from "react";
-import { rpc } from "@/lib/supabase";
+import { rpc } from "@/lib/platform-supabase";
 import { money, errorMessage } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { usePreferences } from "./preferences";
@@ -165,24 +166,23 @@ export function PlatformInsights({ refreshKey }: { refreshKey: number }) {
               ))}
             </div>
           </div>
-          <h3>{tx("Orders by day")}</h3>
-          <div
-            className="daily-chart"
-            role="img"
-            aria-label={tx(
-              "Daily order counts in the selected reporting period",
-            )}
-          >
-            {report.daily.map((d) => (
-              <div key={d.day} title={`${d.day}: ${d.orders}`}>
-                <span
-                  style={{
-                    height: `${Math.max(d.orders ? 3 : 0, (d.orders / Math.max(1, ...report.daily.map((x) => x.orders))) * 130)}px`,
-                  }}
-                />
-                <small>{d.day.slice(5)}</small>
-              </div>
-            ))}
+          <div className="chart-pair">
+            <ActivityChart data={report.daily} />
+            <StatusDonut
+              values={[
+                { name: tx("Served"), value: report.served, color: "#4c9274" },
+                {
+                  name: tx("Open"),
+                  value: report.open_orders,
+                  color: "#b89453",
+                },
+                {
+                  name: tx("Cancelled"),
+                  value: report.cancelled,
+                  color: "#b16b70",
+                },
+              ]}
+            />
           </div>
           <details>
             <summary>{tx("View daily source values")}</summary>

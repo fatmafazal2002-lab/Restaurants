@@ -86,7 +86,7 @@ export function StaffDirectory({
         <h2>{de ? "Ihr Team" : tx("Your team")}</h2>
         <p className="role-note">
           {tx(
-            "Add employee profiles above, then share the matching role login link. Employees must verify their email address.",
+            "Create employee logins above and share their sign-in details privately. New employees change their temporary password and fill in their profile.",
           )}
         </p>
         {error && (

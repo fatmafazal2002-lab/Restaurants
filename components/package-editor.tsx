@@ -1,9 +1,10 @@
 "use client";
+import {ToastBridge} from "./notifications";
 import { translateText as tx } from "@/lib/translation";
 import { usePreferences } from "./preferences";
 
 import { useEffect, useState } from "react";
-import { rpc, supabase } from "@/lib/supabase";
+import { rpc, supabase } from "@/lib/platform-supabase";
 import { errorMessage } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { Field } from "./shared";
@@ -118,7 +119,7 @@ export function PackageEditor({ onChange }: { onChange: () => void }) {
           {error}
         </p>
       )}
-      {notice && <p role="status">{notice}</p>}
+      <ToastBridge message={notice}/><ToastBridge message={error} kind="error"/>
       <div className="catalogue-list">
         {plans.map((p) => (
           <button type="button" key={p.id} onClick={() => setEdit(p)}>

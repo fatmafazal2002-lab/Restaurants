@@ -1,4 +1,5 @@
 "use client";
+import {ToastBridge,useNotifications} from "./notifications";
 import { useEffect, useState } from "react";
 import { translateText as tx } from "@/lib/translation";
 import { usePreferences, PreferenceControls } from "./preferences";
@@ -18,6 +19,7 @@ import { Button } from "./ui/button";
 import { Field } from "./shared";
 export function RestaurantOnboarding() {
   const { locale, setLocale } = usePreferences();
+  const {notify}=useNotifications();
   const [step, setStep] = useState(1),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -53,6 +55,7 @@ export function RestaurantOnboarding() {
     setDraft((d) => ({ ...d, [key]: value }));
   return (
     <div className="tenant-onboarding">
+      <ToastBridge message={error} kind="error"/>
       <header>
         <strong>{tx("Your restaurant. Your signature.")}</strong>
         <PreferenceControls />
@@ -83,6 +86,7 @@ export function RestaurantOnboarding() {
               setError("");
               if (step < 3) {
                 setStep((s) => s + 1);
+                notify(tx("Step complete"));
                 return;
               }
               setBusy(true);
