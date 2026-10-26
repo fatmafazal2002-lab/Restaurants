@@ -38,3 +38,12 @@ Hosted Supabase checks passed for new heading fonts, density, avatar visibility,
 - Browser cart checks confirmed click-to-add, increment, pointer drag while scrolled (quantity 2 to 3; total EUR24 to EUR36), removal and success notification. Touch-specific dragging uses Framer Motion pointer events with a dedicated non-scrolling handle; physical-device touch testing remains outstanding.
 - Video reference frames at 2/8/16/24 seconds were inspected for restrained presentation and order-confirmation feedback.
 - No changes were made to real restaurant employee records during verification. New employee-profile migration backfilled existing non-owner memberships. Docker catalog caching was unavailable; remote migration application succeeded.
+
+## Account reset and first-login setup — 2026-10-26
+
+- Diagnosed two restaurants with one account present in both memberships, plus shared browser Auth sessions. Added tab-local restaurant sessions, isolated Supabase broadcast channels, a separate SaaS Auth storage key and explicit membership-only restaurant selection.
+- 57 tests passed, with 3 opt-in concurrency checks skipped, before final UI-copy cleanup. New tests cover session isolation across tabs/reloads, mandatory setup role denial, forbidden direct setup completion, and self-profile ownership.
+- Live server-route verification passed for owner provisioning, temporary login, blocked work access, reuse-password rejection, successful new password/profile completion, old-password rejection, forbidden employee provisioning, and preservation of existing account passwords. Disposable fixtures were removed.
+- User-authorized reset removed two restaurants and all related memberships, employee profiles, categories, menus, tables, sessions, orders, items, feedback, service requests and restaurant audit logs. Remaining counts were zero; one platform administrator and existing Auth accounts were retained. Matching uploaded media was removed through Storage. A private ignored local recovery snapshot was saved before deletion.
+- Desktop chart preview verified trend/bar switching, keyboard date selection (Oct 21, 26 orders), selected donut segment and popup feedback. Mobile Turkish dark mode had no horizontal overflow at 390 px. Sample-data preview routes were removed before deployment.
+- Supabase migration `202610260001_account_isolation.sql` applied successfully. The employee service key is stored only in the ignored local environment and a Vercel production secret.

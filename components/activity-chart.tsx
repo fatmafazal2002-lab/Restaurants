@@ -1,5 +1,5 @@
 "use client";
-import { useId, useState } from "react";
+import { useEffect, useRef, useId, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { TrendingUp, BarChart3 } from "lucide-react";
 import { translateText as tx } from "@/lib/translation";
@@ -17,10 +17,21 @@ export function ActivityChart({
     reduced = useReducedMotion();
   const [mode, setMode] = useState<"trend" | "bars">("trend"),
     [selected, setSelected] = useState<number | null>(null);
+  const container = useRef<HTMLElement>(null),
+    [chartWidth, setChartWidth] = useState(680);
+  useEffect(() => {
+    const element = container.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) =>
+      setChartWidth(Math.max(260, Math.min(680, entry.contentRect.width))),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
   if (!data.length) return <p>{tx("No orders in this period.")}</p>;
   const max = Math.max(4, ...data.map((d) => d.orders)),
     top = Math.ceil(max / 4) * 4,
-    W = 680,
+    W = chartWidth,
     H = 260,
     left = 42,
     right = 20,
@@ -45,7 +56,7 @@ export function ActivityChart({
       timeZone: "UTC",
     });
   return (
-    <section className="interactive-chart">
+    <section className="interactive-chart" ref={container}>
       <div className="chart-heading">
         <div>
           <p className="eyebrow">{tx("Service rhythm")}</p>
@@ -123,7 +134,7 @@ export function ActivityChart({
               key={`line-${data.length}`}
               d={line}
               fill="none"
-              stroke="var(--brand)"
+              stroke="var(--chart-ink)"
               strokeWidth={3}
               strokeLinejoin="round"
               initial={reduced ? false : { pathLength: 0 }}
@@ -140,7 +151,7 @@ export function ActivityChart({
               width={Math.min(18, (plotW / data.length) * 0.6)}
               height={H - bottom - y(d.orders)}
               rx={4}
-              fill="var(--brand)"
+              fill="var(--chart-ink)"
               opacity={i === active ? 1 : 0.45}
               initial={reduced ? false : { opacity: 0 }}
               animate={{ opacity: i === active ? 1 : 0.45 }}
@@ -152,7 +163,7 @@ export function ActivityChart({
           x2={x(active)}
           y1={16}
           y2={H - bottom}
-          stroke="var(--brand)"
+          stroke="var(--chart-ink)"
           opacity=".35"
           strokeDasharray="4 5"
         />
@@ -161,7 +172,7 @@ export function ActivityChart({
           cy={y(point.orders)}
           r={7}
           fill="var(--surface,#fff)"
-          stroke="var(--brand)"
+          stroke="var(--chart-ink)"
           strokeWidth={3}
         />
         {[

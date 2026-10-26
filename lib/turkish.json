@@ -596,5 +596,8 @@
   "Employee account provisioning is not configured.": "Çalışan hesabı oluşturma yapılandırılmamış.",
   "This email may already have an account. Ask the employee to verify it and use their existing password.": "Bu e-postanın zaten hesabı olabilir. Çalışandan hesabını doğrulamasını ve mevcut parolasını kullanmasını isteyin.",
   "Create employee logins above and share their sign-in details privately. New employees change their temporary password and fill in their profile.": "Yukarıdan çalışan girişleri oluşturun ve bilgilerini özel olarak paylaşın. Yeni çalışanlar geçici parolalarını değiştirir ve profillerini doldurur.",
-  "Complete employee setup first": "Önce çalışan kurulumunu tamamlayın"
+  "Complete employee setup first": "Önce çalışan kurulumunu tamamlayın",
+  "Style selected": "Stil seçildi",
+  "Use the sign-in details provided by your restaurant admin. On your first sign-in, choose your own password and complete your profile.": "Restoran yöneticinizin verdiği giriş bilgilerini kullanın. İlk girişinizde kendi parolanızı seçin ve profilinizi tamamlayın.",
+  "Create your restaurant, open Team, and create cook or floor-service logins. Share each employee’s temporary sign-in details privately.": "Restoranınızı oluşturun, Ekip bölümünü açın ve aşçı veya servis girişleri oluşturun. Her çalışanın geçici giriş bilgilerini özel olarak paylaşın."
 }

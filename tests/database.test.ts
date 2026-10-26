@@ -1035,23 +1035,74 @@ describe("Tenant identity and personnel", () => {
   });
 });
 
-describe('Mandatory employee setup',()=>{
- it('blocks staff permissions until the server completes setup',async()=>{
-  const eid=id(901);await db.query("insert into public.employee_profiles(id,restaurant_id,user_id,name,email,employee_id,role,setup_required) values($1,$2,$3,'Chef','cook@example.com','SETUP-01','cook',true)",[eid,a,cook]);
-  try{
-   await asUser(cook,async()=>{
-    const access=await db.query<{allowed:boolean}>('select public.has_role($1) allowed',[a]);expect(access.rows[0].allowed).toBe(false);
-    const setup=await db.query<{setup:{id:string}}> ('select public.employee_setup() setup');expect(setup.rows[0].setup.id).toBe(eid);
-    await db.query("select public.save_my_employee_profile($1,'New Chef','12345',null)",[eid]);
-    expect((await db.query<{setup_required:boolean}>('select setup_required from public.employee_profiles where id=$1',[eid])).rows[0].setup_required).toBe(true);
-   });
-   await expect(asUser(cook,()=>db.query('select public.finish_employee_setup($1,$2)',[cook,eid]))).rejects.toThrow(/permission denied/);
-   await db.query('select public.finish_employee_setup($1,$2)',[cook,eid]);
-   await asUser(cook,async()=>expect((await db.query<{allowed:boolean}>('select public.has_role($1) allowed',[a])).rows[0].allowed).toBe(true));
-  }finally{await db.query('delete from public.employee_profiles where id=$1',[eid])}
- });
- it('rejects edits to someone else’s personal profile',async()=>{
-  const eid=id(902);await db.query("insert into public.employee_profiles(id,restaurant_id,user_id,name,email,employee_id,role) values($1,$2,$3,'Chef','cook@example.com','SETUP-02','cook')",[eid,a,cook]);
-  try{await expect(asUser(waiter,()=>db.query("select public.save_my_employee_profile($1,'Other','123',null)",[eid]))).rejects.toThrow(/Employee not found/)}finally{await db.query('delete from public.employee_profiles where id=$1',[eid])}
- });
+describe("Mandatory employee setup", () => {
+  it("blocks staff permissions until the server completes setup", async () => {
+    const eid = id(901);
+    await db.query(
+      "insert into public.employee_profiles(id,restaurant_id,user_id,name,email,employee_id,role,setup_required) values($1,$2,$3,'Chef','cook@example.com','SETUP-01','cook',true)",
+      [eid, a, cook],
+    );
+    try {
+      await asUser(cook, async () => {
+        const access = await db.query<{ allowed: boolean }>(
+          "select public.has_role($1) allowed",
+          [a],
+        );
+        expect(access.rows[0].allowed).toBe(false);
+        const setup = await db.query<{ setup: { id: string } }>(
+          "select public.employee_setup() setup",
+        );
+        expect(setup.rows[0].setup.id).toBe(eid);
+        await db.query(
+          "select public.save_my_employee_profile($1,'New Chef','12345',null)",
+          [eid],
+        );
+        expect(
+          (
+            await db.query<{ setup_required: boolean }>(
+              "select setup_required from public.employee_profiles where id=$1",
+              [eid],
+            )
+          ).rows[0].setup_required,
+        ).toBe(true);
+      });
+      await expect(
+        asUser(cook, () =>
+          db.query("select public.finish_employee_setup($1,$2)", [cook, eid]),
+        ),
+      ).rejects.toThrow(/permission denied/);
+      await db.query("select public.finish_employee_setup($1,$2)", [cook, eid]);
+      await asUser(cook, async () =>
+        expect(
+          (
+            await db.query<{ allowed: boolean }>(
+              "select public.has_role($1) allowed",
+              [a],
+            )
+          ).rows[0].allowed,
+        ).toBe(true),
+      );
+    } finally {
+      await db.query("delete from public.employee_profiles where id=$1", [eid]);
+    }
+  });
+  it("rejects edits to someone else’s personal profile", async () => {
+    const eid = id(902);
+    await db.query(
+      "insert into public.employee_profiles(id,restaurant_id,user_id,name,email,employee_id,role) values($1,$2,$3,'Chef','cook@example.com','SETUP-02','cook')",
+      [eid, a, cook],
+    );
+    try {
+      await expect(
+        asUser(waiter, () =>
+          db.query(
+            "select public.save_my_employee_profile($1,'Other','123',null)",
+            [eid],
+          ),
+        ),
+      ).rejects.toThrow(/Employee not found/);
+    } finally {
+      await db.query("delete from public.employee_profiles where id=$1", [eid]);
+    }
+  });
 });

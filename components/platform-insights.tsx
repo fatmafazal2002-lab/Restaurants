@@ -66,7 +66,7 @@ export function PlatformInsights({ refreshKey }: { refreshKey: number }) {
     };
   }, [days, refreshKey]);
   return (
-    <section className="panel insights">
+    <section className="panel insights" id="platform-analytics">
       <div className="section-heading">
         <div>
           <h2>{tx("Platform analytics")}</h2>

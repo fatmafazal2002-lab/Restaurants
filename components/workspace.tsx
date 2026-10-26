@@ -414,7 +414,8 @@ export function Workspace({
       )}
     </Modal>
   );
-  if (w.employeeSetup) return <EmployeeSetup profile={w.employeeSetup} />;
+  if (w.employeeSetup)
+    return <EmployeeSetup profile={w.employeeSetup} brand={brand} />;
   if (w.guestToken)
     return (
       <div

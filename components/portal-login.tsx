@@ -80,7 +80,9 @@ export function PortalLogin({
           )}
         </a>
         <span>{brand?.name || tx("A better service, together.")}</span>
-        <a className="portal-separation-link" href="/login/platform">{tx("App administrator login")}</a>
+        <a className="portal-separation-link" href="/login/platform">
+          {tx("App administrator login")}
+        </a>
         <PreferenceControls />
       </header>
       <div className="portal-login-grid">
@@ -205,11 +207,9 @@ export function PortalLogin({
             </Field>
             {portal !== "admin" && (
               <p className="role-note">
-                {german
-                  ? "Nach der Registrierung muss ein Administrator Ihre E-Mail dem Restaurant und Ihrer Teamrolle zuweisen."
-                  : tx(
-                      "After registration, an administrator must assign your email to the restaurant and your staff role.",
-                    )}
+                {tx(
+                  "Use the sign-in details provided by your restaurant admin. On your first sign-in, choose your own password and complete your profile.",
+                )}
               </p>
             )}
             {error && (
@@ -238,23 +238,25 @@ export function PortalLogin({
               )}
               <ArrowRight size={17} />
             </Button>
-            <Button
-              variant="ghost"
-              type="button"
-              onClick={() => {
-                setRegister(!register);
-                setError("");
-                setMessage("");
-              }}
-            >
-              {register
-                ? german
-                  ? "Bereits registriert? Anmelden"
-                  : tx("Already registered? Sign in")
-                : german
-                  ? "Neu hier? Konto erstellen"
-                  : tx("New here? Create an account")}
-            </Button>
+            {portal === "admin" && (
+              <Button
+                variant="ghost"
+                type="button"
+                onClick={() => {
+                  setRegister(!register);
+                  setError("");
+                  setMessage("");
+                }}
+              >
+                {register
+                  ? german
+                    ? "Bereits registriert? Anmelden"
+                    : tx("Already registered? Sign in")
+                  : german
+                    ? "Neu hier? Konto erstellen"
+                    : tx("New here? Create an account")}
+              </Button>
+            )}
           </form>
         </motion.section>
       </div>

@@ -1,5 +1,5 @@
 "use client";
-import {ToastBridge} from "./notifications";
+import { ToastBridge } from "./notifications";
 import { translateText as tx } from "@/lib/translation";
 import { usePreferences } from "./preferences";
 
@@ -85,7 +85,7 @@ export function PackageEditor({ onChange }: { onChange: () => void }) {
     onChange();
   };
   return (
-    <section className="panel package-editor">
+    <section className="panel package-editor" id="platform-packages">
       <div className="section-heading">
         <div>
           <h2>{tx("Packages, prices & features")}</h2>
@@ -119,7 +119,8 @@ export function PackageEditor({ onChange }: { onChange: () => void }) {
           {error}
         </p>
       )}
-      <ToastBridge message={notice}/><ToastBridge message={error} kind="error"/>
+      <ToastBridge message={notice} />
+      <ToastBridge message={error} kind="error" />
       <div className="catalogue-list">
         {plans.map((p) => (
           <button type="button" key={p.id} onClick={() => setEdit(p)}>

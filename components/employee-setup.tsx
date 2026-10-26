@@ -1,6 +1,11 @@
 "use client";
-import {ToastBridge} from "./notifications";
+import { ToastBridge } from "./notifications";
 import { useState } from "react";
+import {
+  brandingStyle,
+  brandingAttributes,
+  type Branding,
+} from "@/lib/branding";
 import { supabase } from "@/lib/supabase";
 import { employeeApi } from "@/lib/employee-api";
 import { errorMessage } from "@/lib/utils";
@@ -11,13 +16,25 @@ import { Button } from "./ui/button";
 import { PreferenceControls, usePreferences } from "./preferences";
 import { SignOutButton } from "./sign-out-button";
 import { RoleAvatar } from "./role-avatar";
-export function EmployeeSetup({ profile }: { profile: EmployeeSetupData }) {
+export function EmployeeSetup({
+  profile,
+  brand,
+}: {
+  profile: EmployeeSetupData;
+  brand?: Partial<Branding> | null;
+}) {
   usePreferences();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   return (
-    <main className="employee-setup">
-      <ToastBridge message={error} kind="error"/>
+    <main
+      className="employee-setup themed"
+      style={brandingStyle(brand)}
+      data-theme={brand?.theme_mode || "light"}
+      data-style={brand?.interface_style || "classic"}
+      {...brandingAttributes(brand)}
+    >
+      <ToastBridge message={error} kind="error" />
       <header>
         <strong>{profile.restaurant_name}</strong>
         <PreferenceControls />

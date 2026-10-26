@@ -221,6 +221,14 @@ export function PlatformConsole() {
         </main>
       ) : (
         <main className="platform-main">
+          <nav
+            className="platform-sections"
+            aria-label={tx("App administration")}
+          >
+            <a href="#platform-analytics">{tx("Platform analytics")}</a>
+            <a href="#platform-restaurants">{tx("Restaurants")}</a>
+            <a href="#platform-packages">{tx("Packages, prices & features")}</a>
+          </nav>
           <div className="platform-title">
             <div>
               <p className="eyebrow">{tx("MISE CONTROL ROOM")}</p>
@@ -275,7 +283,7 @@ export function PlatformConsole() {
               setRevision((x) => x + 1);
             }}
           />
-          <section className="panel">
+          <section className="panel" id="platform-restaurants">
             <div className="section-heading">
               <div>
                 <h2>{tx("Restaurant directory")}</h2>

@@ -1,5 +1,5 @@
 "use client";
-import {ToastBridge,useNotifications} from "./notifications";
+import { ToastBridge, useNotifications } from "./notifications";
 import { useEffect, useState } from "react";
 import { translateText as tx } from "@/lib/translation";
 import { usePreferences, PreferenceControls } from "./preferences";
@@ -19,7 +19,7 @@ import { Button } from "./ui/button";
 import { Field } from "./shared";
 export function RestaurantOnboarding() {
   const { locale, setLocale } = usePreferences();
-  const {notify}=useNotifications();
+  const { notify } = useNotifications();
   const [step, setStep] = useState(1),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -55,7 +55,7 @@ export function RestaurantOnboarding() {
     setDraft((d) => ({ ...d, [key]: value }));
   return (
     <div className="tenant-onboarding">
-      <ToastBridge message={error} kind="error"/>
+      <ToastBridge message={error} kind="error" />
       <header>
         <strong>{tx("Your restaurant. Your signature.")}</strong>
         <PreferenceControls />
@@ -179,7 +179,10 @@ export function RestaurantOnboarding() {
             )}
             {step === 2 && (
               <>
-                <div className="interface-options">
+                <div
+                  className="interface-options"
+                  onClick={() => notify(tx("Style selected"))}
+                >
                   {interfaces.map((option) => (
                     <button
                       type="button"

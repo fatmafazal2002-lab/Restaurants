@@ -596,5 +596,8 @@
   "Employee account provisioning is not configured.": "Die Erstellung von Mitarbeiterkonten ist nicht eingerichtet.",
   "This email may already have an account. Ask the employee to verify it and use their existing password.": "Diese E-Mail-Adresse hat möglicherweise bereits ein Konto. Bitten Sie den Mitarbeiter, es zu bestätigen und sein bestehendes Passwort zu verwenden.",
   "Create employee logins above and share their sign-in details privately. New employees change their temporary password and fill in their profile.": "Erstellen Sie oben Mitarbeiterzugänge und teilen Sie die Anmeldedaten vertraulich. Neue Mitarbeiter ändern ihr temporäres Passwort und vervollständigen ihr Profil.",
-  "Complete employee setup first": "Schließen Sie zuerst die Mitarbeitereinrichtung ab"
+  "Complete employee setup first": "Schließen Sie zuerst die Mitarbeitereinrichtung ab",
+  "Style selected": "Design ausgewählt",
+  "Use the sign-in details provided by your restaurant admin. On your first sign-in, choose your own password and complete your profile.": "Verwenden Sie die Anmeldedaten Ihrer Restaurantverwaltung. Wählen Sie bei der ersten Anmeldung Ihr eigenes Passwort und vervollständigen Sie Ihr Profil.",
+  "Create your restaurant, open Team, and create cook or floor-service logins. Share each employee’s temporary sign-in details privately.": "Erstellen Sie Ihr Restaurant, öffnen Sie Team und erstellen Sie Küchen- oder Servicezugänge. Teilen Sie die temporären Anmeldedaten vertraulich mit jedem Mitarbeiter."
 }

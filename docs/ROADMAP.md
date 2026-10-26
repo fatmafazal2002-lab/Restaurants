@@ -4,7 +4,7 @@ The implemented MVP covers the core ordering workflow and initial administration
 
 - Browser-level multi-device/reconnection testing and signup-email delivery checks. Hosted Auth, RPC workflow, Realtime, Storage and concurrent submission/transition checks now pass; see VALIDATION.md.
 - Full restaurant history browsing, popular-item analysis, customer directory, and payment-based sales reports. Platform analytics aggregate database records for 7/30/90-day periods. Active queues already load separately using cursor pagination.
-- Staff invitation emails, password recovery, account conversion from anonymous guests, and waiter table assignment UI.
+- Automatic employee invitation emails, self-service password recovery, account conversion from anonymous guests, and waiter table assignment UI. Temporary-password provisioning and mandatory first-login password/profile setup are implemented.
 - Table token rotation/session revocation controls and printable QR artwork. Current guest links can be reused by anyone who possesses them while a table remains active.
 - Category reordering, video uploads, public verified dish-level reviews. Current feedback is a verified-order rating shown to the owner/admin and its author.
 - Custom background uploads and downloadable custom font files. Per-restaurant logo and cover uploads, welcome copy, name, address, phone, primary/accent colors, independent body/heading fonts, presets, interface styles, density, avatar visibility, light/dark/device themes and grid/list menu layouts are implemented.

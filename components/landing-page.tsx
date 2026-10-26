@@ -218,7 +218,7 @@ export function LandingPage() {
                 <h3>{x.title}</h3>
                 <p>{x.text}</p>
                 <a href={x.link}>
-                  {tx("Open")} {tx(x.label)} <ArrowUpRight size={17} />
+                  {`${tx("Open")} ${tx(x.label)}`} <ArrowUpRight size={17} />
                 </a>
               </article>
             ))}
@@ -384,7 +384,7 @@ export function LandingPage() {
             [
               tx("How do I get my team started?"),
               tx(
-                "Create your restaurant, then copy its portal links from Team. Staff register and confirm their email; an administrator assigns their role using that registered email.",
+                "Create your restaurant, open Team, and create cook or floor-service logins. Share each employee’s temporary sign-in details privately.",
               ),
             ],
             [

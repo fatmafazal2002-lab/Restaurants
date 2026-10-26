@@ -1,5 +1,5 @@
 "use client";
-import {ToastBridge,useNotifications} from "./notifications";
+import { ToastBridge, useNotifications } from "./notifications";
 import { translateText as tx } from "@/lib/translation";
 
 import { PreferenceControls, usePreferences } from "./preferences";
@@ -48,7 +48,7 @@ export function GuestView({
   openAuth: () => void;
 }) {
   usePreferences();
-  const {notify}=useNotifications();
+  const { notify } = useNotifications();
 
   const [cart, setCart] = useState<CartItem[]>([]),
     [pending, setPending] = useState<Pending | null>(null),
@@ -58,15 +58,9 @@ export function GuestView({
     [ratingOrder, setRatingOrder] = useState<Order | null>(null),
     [tab, setTab] = useState<"menu" | "orders">("menu");
   const reducedMotion = useReducedMotion();
-  const [cartNotice, setCartNotice] = useState("");
   const [dragging, setDragging] = useState(false),
     [overDrop, setOverDrop] = useState(false);
   const dropTarget = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!cartNotice) return;
-    const timer = setTimeout(() => setCartNotice(""), 3000);
-    return () => clearTimeout(timer);
-  }, [cartNotice]);
   const sending = useRef(false);
   const brand = w.restaurant ?? w.previewBrand;
   useEffect(() => {
@@ -565,7 +559,8 @@ export function GuestView({
           {tx("Drop here to add to your order")}
         </div>
       )}
-      <ToastBridge message={notice}/><ToastBridge message={error||w.error} kind="error"/>
+      <ToastBridge message={notice} />
+      <ToastBridge message={error || w.error} kind="error" />
       {edit && (
         <Modal title={`${t("edit")}: ${edit.name}`} close={() => setEdit(null)}>
           <form

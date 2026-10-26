@@ -21,18 +21,20 @@ const Context = createContext({
 export const useNotifications = () => useContext(Context);
 export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Toast[]>([]);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const reduced = useReducedMotion();
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const notify = (message: string, kind: Toast["kind"] = "success") => {
     const id = Date.now() + Math.random();
     setItems((items) => [...items.slice(-2), { id, message, kind }]);
-    timers.current.push(
-      setTimeout(
-        () => setItems((items) => items.filter((t) => t.id !== id)),
-        kind === "error" ? 8000 : 4500,
-      ),
+    const timer = setTimeout(
+      () => {
+        timers.current.delete(timer);
+        setItems((items) => items.filter((t) => t.id !== id));
+      },
+      kind === "error" ? 8000 : 4500,
     );
+    timers.current.add(timer);
   };
   return (
     <Context.Provider value={{ notify }}>
